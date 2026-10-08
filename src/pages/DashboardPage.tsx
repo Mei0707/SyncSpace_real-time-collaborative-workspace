@@ -56,7 +56,7 @@ const columns: Array<{
   {
     id: "draft",
     title: "Draft",
-    tint: "bg-muted/40",
+    tint: "bg-muted/55",
     accent: "bg-soft",
   },
   {
@@ -129,8 +129,8 @@ function DocumentBoardCard({
       ref={setNodeRef}
       style={style}
       className={cn(
-        "group relative rounded-xl border border-line bg-panel p-4 shadow-sm transition",
-        "hover:-translate-y-0.5 hover:border-brand/35 hover:shadow-md",
+        "group relative rounded-xl border border-line bg-panel p-4 shadow-[0_8px_22px_rgb(15_23_42/0.07)] transition",
+        "hover:-translate-y-0.5 hover:border-brand/45 hover:shadow-[0_14px_30px_rgb(15_23_42/0.11)]",
       )}
     >
       <div className="mb-3 flex items-start justify-between gap-3 text-xs text-soft">
@@ -288,7 +288,7 @@ function BoardColumn({
     <section
       ref={setNodeRef}
       className={cn(
-        "min-h-[28rem] rounded-[18px] border border-line p-4 transition",
+        "min-h-[28rem] rounded-[18px] border border-line p-4 shadow-[inset_0_1px_0_rgb(255_255_255/0.58)] transition dark:shadow-none",
         column.tint,
         isOver ? "ring-2 ring-brand/35" : "",
       )}
@@ -298,7 +298,7 @@ function BoardColumn({
           <span className={cn("h-2.5 w-2.5 rounded-full", column.accent)} />
           {column.title}
         </h2>
-        <span className="rounded-full bg-panel px-2 py-0.5 text-xs text-soft">
+        <span className="rounded-full border border-line/70 bg-panel px-2 py-0.5 text-xs text-soft">
           {documents.length}
         </span>
       </div>
@@ -806,7 +806,7 @@ export function DashboardPage() {
             </p>
           </div>
 
-          <div className="grid min-w-[min(100%,28rem)] grid-cols-3 divide-x divide-line rounded-xl border border-line bg-canvas/60">
+          <div className="grid min-w-[min(100%,28rem)] grid-cols-3 divide-x divide-line rounded-xl border border-line bg-canvas/75 shadow-sm">
             <div className="px-4 py-3">
               <FileText className="mb-2 text-brand" size={18} />
               <p className="text-2xl font-semibold">{documents.length}</p>
@@ -886,7 +886,7 @@ export function DashboardPage() {
             </div>
           </div>
 
-          <div className="mb-4 flex flex-col gap-3 rounded-xl border border-line bg-panel p-3 md:flex-row md:items-center md:justify-between">
+          <div className="mb-4 flex flex-col gap-3 rounded-xl border border-line bg-panel/95 p-3 shadow-sm md:flex-row md:items-center md:justify-between">
             <label className="relative min-w-0 flex-1">
               <span className="sr-only">Search board</span>
               <Search
@@ -1000,19 +1000,19 @@ export function DashboardPage() {
           {activeView === "activity" ? <ActivityFeed activity={activity} /> : null}
         </div>
 
-        <aside className="space-y-5 rounded-[18px] border border-line bg-panel p-4">
+        <aside className="space-y-5 rounded-[18px] border border-line bg-panel/95 p-4 shadow-sm">
           <div>
             <p className="text-xs font-semibold uppercase text-soft">
               Workspace pulse
             </p>
             <div className="mt-4 grid grid-cols-2 gap-3">
-              <div className="rounded-xl border border-line bg-canvas/70 p-3">
+              <div className="rounded-xl border border-line bg-canvas/80 p-3 shadow-sm">
                 <p className="text-2xl font-semibold">
                   {activeCollaborators.size}
                 </p>
                 <p className="text-xs text-soft">Online now</p>
               </div>
-              <div className="rounded-xl border border-line bg-canvas/70 p-3">
+              <div className="rounded-xl border border-line bg-canvas/80 p-3 shadow-sm">
                 <p className="text-2xl font-semibold">
                   {filteredDocuments.length}
                 </p>

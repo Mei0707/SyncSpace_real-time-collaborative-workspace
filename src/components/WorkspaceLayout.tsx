@@ -58,7 +58,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           onClick={onNavigate}
           className="inline-flex items-center gap-3 rounded-md"
         >
-          <span className="grid h-9 w-9 place-items-center rounded-md bg-ink text-sm font-black text-panel">
+          <span className="grid h-9 w-9 place-items-center rounded-md bg-ink text-sm font-black text-panel shadow-sm">
             S
           </span>
           <span>
@@ -80,7 +80,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           className={cn(
             "flex h-9 items-center gap-2 rounded-md px-2.5 text-sm font-medium transition",
             location.pathname === "/"
-              ? "bg-muted text-ink"
+              ? "bg-panel text-ink shadow-sm ring-1 ring-line/70"
               : "text-soft hover:bg-muted hover:text-ink",
           )}
         >
@@ -100,7 +100,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           className={cn(
             "flex h-9 w-full items-center gap-2 rounded-md px-2.5 text-sm transition hover:bg-muted hover:text-ink",
             location.pathname === "/team"
-              ? "bg-muted font-medium text-ink"
+              ? "bg-panel font-medium text-ink shadow-sm ring-1 ring-line/70"
               : "text-soft",
           )}
         >
@@ -127,7 +127,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         <button
           type="button"
           onClick={handleCreateDocument}
-          className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-md bg-ink px-3 text-sm font-semibold text-panel transition hover:bg-ink/90 disabled:opacity-60"
+          className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-md bg-ink px-3 text-sm font-semibold text-panel shadow-sm transition hover:bg-ink/90 disabled:opacity-60"
           disabled={!canCreateDocument || createDocument.isPending}
         >
           <Plus size={15} />
@@ -179,7 +179,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
 function BrowserChrome() {
   return (
-    <div className="hidden h-10 shrink-0 items-center gap-4 border-b border-line bg-muted/45 px-4 md:flex">
+    <div className="hidden h-10 shrink-0 items-center gap-4 border-b border-line bg-muted/60 px-4 md:flex">
       <div className="flex items-center gap-2">
         <span className="h-3 w-3 rounded-full bg-[#ff5f57]" />
         <span className="h-3 w-3 rounded-full bg-[#ffbd2e]" />
@@ -208,7 +208,7 @@ function TopBar({ mobileSidebar }: { mobileSidebar: ReactNode }) {
   const unreadCount = notifications.filter((notification) => !notification.readAt).length;
 
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between border-b border-line bg-panel/92 px-4 backdrop-blur md:px-5">
+    <header className="flex h-14 shrink-0 items-center justify-between border-b border-line bg-panel/96 px-4 backdrop-blur md:px-5">
       <div className="flex items-center gap-3">
         <div className="md:hidden">{mobileSidebar}</div>
         <button
@@ -297,7 +297,7 @@ function TopBar({ mobileSidebar }: { mobileSidebar: ReactNode }) {
           {theme === "light" ? <Moon size={17} /> : <Sun size={17} />}
         </button>
         {user ? (
-          <div className="ml-1 hidden items-center gap-2 rounded-md border border-line bg-canvas/70 py-1 pl-1 pr-1 md:flex">
+          <div className="ml-1 hidden items-center gap-2 rounded-md border border-line bg-canvas/85 py-1 pl-1 pr-1 shadow-sm md:flex">
             <span
               className="grid h-7 w-7 place-items-center rounded-full text-[10px] font-semibold text-white"
               style={{ backgroundColor: user.color }}
@@ -359,12 +359,12 @@ export function WorkspaceLayout() {
 
   return (
     <div className="min-h-screen bg-canvas p-0 text-ink md:p-5">
-      <div className="flex min-h-screen flex-col overflow-hidden bg-panel shadow-2xl md:min-h-[calc(100vh-2.5rem)] md:rounded-[18px] md:border md:border-line">
+      <div className="flex min-h-screen flex-col overflow-hidden bg-panel shadow-[0_24px_80px_rgb(15_23_42/0.16)] md:min-h-[calc(100vh-2.5rem)] md:rounded-[18px] md:border md:border-line">
         <BrowserChrome />
         <div className="flex min-h-0 flex-1">
           <aside
             className={cn(
-              "hidden border-r border-line bg-muted/45 px-4 py-5 transition-[width] duration-200 md:block",
+              "hidden border-r border-line bg-muted/58 px-4 py-5 transition-[width] duration-200 md:block",
               isSidebarOpen ? "w-[19rem]" : "w-0 overflow-hidden p-0",
             )}
           >

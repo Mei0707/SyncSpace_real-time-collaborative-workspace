@@ -17,28 +17,28 @@
 }
 
 :root {
-  --sync-color-canvas: 244 245 247;
-  --sync-color-panel: 252 252 253;
-  --sync-color-muted: 235 238 242;
-  --sync-color-ink: 27 31 36;
-  --sync-color-soft: 92 101 112;
-  --sync-color-line: 214 219 226;
-  --sync-color-brand: 22 119 121;
-  --sync-color-accent: 177 75 54;
-  --sync-color-good: 31 122 84;
-  --sync-color-warn: 170 102 35;
+  --sync-color-canvas: 248 249 251;
+  --sync-color-panel: 255 255 255;
+  --sync-color-muted: 241 243 246;
+  --sync-color-ink: 20 22 26;
+  --sync-color-soft: 92 99 112;
+  --sync-color-line: 186 194 205;
+  --sync-color-brand: 20 120 116;
+  --sync-color-accent: 190 76 55;
+  --sync-color-good: 36 128 87;
+  --sync-color-warn: 174 112 39;
   color-scheme: light;
 }
 
 .dark {
-  --sync-color-canvas: 17 19 23;
-  --sync-color-panel: 25 28 33;
-  --sync-color-muted: 36 41 48;
-  --sync-color-ink: 236 238 241;
-  --sync-color-soft: 158 166 176;
-  --sync-color-line: 63 70 81;
-  --sync-color-brand: 89 187 181;
-  --sync-color-accent: 232 129 105;
+  --sync-color-canvas: 9 10 12;
+  --sync-color-panel: 17 18 20;
+  --sync-color-muted: 29 31 35;
+  --sync-color-ink: 245 246 248;
+  --sync-color-soft: 164 171 181;
+  --sync-color-line: 75 82 94;
+  --sync-color-brand: 84 190 178;
+  --sync-color-accent: 235 122 94;
   --sync-color-good: 101 196 149;
   --sync-color-warn: 230 171 92;
   color-scheme: dark;
@@ -53,8 +53,7 @@ body,
 body {
   margin: 0;
   background:
-    radial-gradient(circle at 8% 0%, rgb(var(--sync-color-accent) / 0.22), transparent 28rem),
-    radial-gradient(circle at 96% 10%, rgb(var(--sync-color-brand) / 0.16), transparent 24rem),
+    linear-gradient(180deg, rgb(var(--sync-color-muted) / 0.72), transparent 18rem),
     rgb(var(--sync-color-canvas));
   color: rgb(var(--sync-color-ink));
   font-family:
@@ -66,8 +65,7 @@ body {
 
 .dark body {
   background:
-    radial-gradient(circle at 12% 0%, rgb(var(--sync-color-brand) / 0.14), transparent 28rem),
-    radial-gradient(circle at 94% 8%, rgb(var(--sync-color-accent) / 0.1), transparent 24rem),
+    linear-gradient(180deg, rgb(var(--sync-color-muted) / 0.56), transparent 18rem),
     rgb(var(--sync-color-canvas));
 }
 
@@ -92,6 +90,28 @@ textarea:focus-visible {
 
 ::selection {
   background: rgb(var(--sync-color-brand) / 0.24);
+}
+
+.border {
+  border-width: 1.25px;
+}
+
+.border-line {
+  border-color: rgb(var(--sync-color-line) / 0.92);
+}
+
+.divide-y.divide-line > :not(:last-child) {
+  border-bottom-color: rgb(var(--sync-color-line) / 0.88);
+  border-bottom-width: 1.25px;
+}
+
+.divide-x.divide-line > :not(:last-child) {
+  border-right-color: rgb(var(--sync-color-line) / 0.88);
+  border-right-width: 1.25px;
+}
+
+.ring-line {
+  --tw-ring-color: rgb(var(--sync-color-line) / 0.88);
 }
 
 .sync-editor p {
@@ -129,7 +149,7 @@ textarea:focus-visible {
 .sync-editor pre {
   overflow-x: auto;
   border-radius: 0.375rem;
-  border: 1px solid rgb(var(--sync-color-line));
+  border: 1.25px solid rgb(var(--sync-color-line) / 0.9);
   background: rgb(var(--sync-color-muted) / 0.72);
   padding: 0.95rem;
   line-height: 1.6;

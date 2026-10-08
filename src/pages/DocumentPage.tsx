@@ -179,7 +179,7 @@ function DocumentEditor({
 
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-6 md:px-8 md:py-9">
-      <article className="overflow-hidden rounded-md border border-line bg-panel shadow-sm">
+      <article className="overflow-hidden rounded-xl border border-line bg-panel shadow-[0_12px_34px_rgb(15_23_42/0.08)]">
         <header className="border-b border-line px-5 py-5 md:px-7">
           <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
             <div className="min-w-0 flex-1">
@@ -229,7 +229,7 @@ function DocumentEditor({
                   type="button"
                   onClick={handleSave}
                   disabled={!hasTitleChanges || updateDocument.isPending}
-                  className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-ink px-3.5 text-sm font-semibold text-panel transition hover:bg-ink/90 disabled:cursor-not-allowed disabled:opacity-55"
+                  className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-ink px-3.5 text-sm font-semibold text-panel shadow-sm transition hover:bg-ink/90 disabled:cursor-not-allowed disabled:opacity-55"
                 >
                   {hasTitleChanges ? <Save size={16} /> : <Check size={16} />}
                   {updateDocument.isPending
@@ -276,7 +276,7 @@ function DocumentEditor({
       </article>
 
       <section className="mt-5 grid gap-4 lg:grid-cols-[1fr_24rem]">
-        <div className="rounded-md border border-line bg-panel p-4">
+        <div className="rounded-xl border border-line bg-panel/95 p-4 shadow-sm">
           <div className="mb-3 flex flex-wrap gap-2">
             {[
               ["comments", MessageSquare, `Comments ${comments.length}`],
@@ -317,7 +317,7 @@ function DocumentEditor({
                 <button
                   type="submit"
                   disabled={createComment.isPending || !commentBody.trim()}
-                  className="h-9 rounded-md bg-ink px-3 text-sm font-semibold text-panel disabled:opacity-60"
+                  className="h-9 rounded-md bg-ink px-3 text-sm font-semibold text-panel shadow-sm disabled:opacity-60"
                 >
                   Add comment
                 </button>
@@ -327,7 +327,7 @@ function DocumentEditor({
                   comments.map((comment) => (
                     <article
                       key={comment.id}
-                      className="rounded-md border border-line bg-canvas p-3"
+                      className="rounded-md border border-line bg-canvas/80 p-3 shadow-sm"
                     >
                       <div className="flex items-center gap-2">
                         <span
@@ -366,7 +366,7 @@ function DocumentEditor({
           {sidePanel === "files" ? (
             <div className="space-y-4">
               {canEdit ? (
-                <label className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-md bg-ink px-3 text-sm font-semibold text-panel">
+                <label className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-md bg-ink px-3 text-sm font-semibold text-panel shadow-sm">
                   <Upload size={15} />
                   Upload file
                   <input type="file" className="sr-only" onChange={handleFileUpload} />
@@ -377,7 +377,7 @@ function DocumentEditor({
                   attachments.map((attachment) => (
                     <div
                       key={attachment.id}
-                      className="flex items-center justify-between gap-3 rounded-md border border-line bg-canvas p-3"
+                      className="flex items-center justify-between gap-3 rounded-md border border-line bg-canvas/80 p-3 shadow-sm"
                     >
                       <div className="min-w-0">
                         <p className="truncate text-sm font-semibold">
@@ -427,7 +427,7 @@ function DocumentEditor({
                 history.map((version) => (
                   <article
                     key={version.id}
-                    className="rounded-md border border-line bg-canvas p-3"
+                    className="rounded-md border border-line bg-canvas/80 p-3 shadow-sm"
                   >
                     <div className="flex items-center justify-between gap-3">
                       <div>
@@ -454,7 +454,7 @@ function DocumentEditor({
           ) : null}
         </div>
 
-        <aside className="rounded-md border border-line bg-panel p-4">
+        <aside className="rounded-xl border border-line bg-panel/95 p-4 shadow-sm">
           <h2 className="text-sm font-semibold">Document Workspace</h2>
           <div className="mt-4 space-y-3 text-sm text-soft">
             <p>Use comments for discussion and @email mentions.</p>

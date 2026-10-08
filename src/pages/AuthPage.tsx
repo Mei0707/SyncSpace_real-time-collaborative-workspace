@@ -24,9 +24,9 @@ export function AuthPage() {
 
   return (
     <main className="grid min-h-screen place-items-center bg-canvas px-4 py-8 text-ink">
-      <section className="w-full max-w-md rounded-[18px] border border-line bg-panel p-6 shadow-2xl">
+      <section className="w-full max-w-md rounded-[18px] border border-line bg-panel p-6 shadow-[0_24px_70px_rgb(15_23_42/0.14)]">
         <div className="flex items-center gap-3">
-          <span className="grid h-11 w-11 place-items-center rounded-md bg-ink text-lg font-black text-panel">
+          <span className="grid h-11 w-11 place-items-center rounded-md bg-ink text-lg font-black text-panel shadow-sm">
             S
           </span>
           <div>
@@ -110,7 +110,7 @@ export function AuthPage() {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-ink px-3 text-sm font-semibold text-panel transition hover:bg-ink/90 disabled:opacity-60"
+            className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-ink px-3 text-sm font-semibold text-panel shadow-sm transition hover:bg-ink/90 disabled:opacity-60"
           >
             {mode === "login" ? <LogIn size={16} /> : <UserPlus size={16} />}
             {isSubmitting
