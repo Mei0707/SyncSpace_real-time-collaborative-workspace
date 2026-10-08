@@ -14,7 +14,9 @@ This implementation now includes the Phase 1 foundation and the first collaborat
 - Persisted Yjs snapshots in SQLite
 - Responsive workspace shell with collapsible navigation
 - Drag-and-drop document board with status updates
-- Card actions for rename, duplicate, delete, and status changes
+- Optimistic board mutations with rollback on API failure
+- Board search, status filters, and card menus for rename, duplicate, delete, and status changes
+- Local mock workspace identity shown in the top bar
 - Searchable document list and lazy-loaded editable document page
 - Theme switching, live sync status, and active collaborator presence
 - Vitest, React Testing Library, and Playwright collaboration tests
@@ -39,7 +41,6 @@ The browser app proxies `/api` and `/collaboration` requests through Vite during
 ## Remaining Implementation Phases
 
 1. Move from local SQLite to PostgreSQL for deployed multi-user environments.
-2. Add authentication and workspace authorization.
+2. Replace the local mock identity with authentication and workspace authorization.
 3. Add collaborator cursor rendering.
-4. Add optimistic board mutations with rollback on API failure.
-5. Add CI browser installation/cache strategy for Playwright.
+4. Add CI browser installation/cache strategy for Playwright.

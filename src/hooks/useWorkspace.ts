@@ -8,7 +8,7 @@ import {
   getWorkspace,
   updateDocument,
 } from "../data/workspaceApi";
-import type { DocumentUpdateInput } from "../data/types";
+import type { DocumentUpdateInput, Workspace, WorkspaceDocument } from "../data/types";
 
 export const workspaceKeys = {
   root: ["workspace"] as const,
@@ -63,9 +63,74 @@ export function useUpdateDocument() {
 
   return useMutation({
     mutationFn: (input: DocumentUpdateInput) => updateDocument(input),
+    onMutate: async (input) => {
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: workspaceKeys.root }),
+        queryClient.cancelQueries({ queryKey: workspaceKeys.document(input.id) }),
+      ]);
+
+      const previousWorkspace = queryClient.getQueryData<Workspace>(
+        workspaceKeys.root,
+      );
+      const previousDocument = queryClient.getQueryData<WorkspaceDocument>(
+        workspaceKeys.document(input.id),
+      );
+      const updatedAt = new Date().toISOString();
+
+      queryClient.setQueryData<Workspace>(workspaceKeys.root, (current) => {
+        if (!current) {
+          return current;
+        }
+
+        return {
+          ...current,
+          documents: current.documents.map((document) =>
+            document.id === input.id
+              ? { ...document, ...input, updatedAt }
+              : document,
+          ),
+        };
+      });
+
+      queryClient.setQueryData<WorkspaceDocument>(
+        workspaceKeys.document(input.id),
+        (current) => (current ? { ...current, ...input, updatedAt } : current),
+      );
+
+      return { previousWorkspace, previousDocument };
+    },
+    onError: (_error, input, context) => {
+      if (context?.previousWorkspace) {
+        queryClient.setQueryData(workspaceKeys.root, context.previousWorkspace);
+      }
+
+      if (context?.previousDocument) {
+        queryClient.setQueryData(
+          workspaceKeys.document(input.id),
+          context.previousDocument,
+        );
+      }
+    },
     onSuccess: (document) => {
       queryClient.setQueryData(workspaceKeys.document(document.id), document);
+      queryClient.setQueryData<Workspace>(workspaceKeys.root, (current) => {
+        if (!current) {
+          return current;
+        }
+
+        return {
+          ...current,
+          documents: current.documents.map((item) =>
+            item.id === document.id ? document : item,
+          ),
+        };
+      });
+    },
+    onSettled: (_document, _error, input) => {
       queryClient.invalidateQueries({ queryKey: workspaceKeys.root });
+      queryClient.invalidateQueries({
+        queryKey: workspaceKeys.document(input.id),
+      });
     },
   });
 }
@@ -75,7 +140,18 @@ export function useCreateDocument() {
 
   return useMutation({
     mutationFn: createDocument,
-    onSuccess: () => {
+    onSuccess: (document) => {
+      queryClient.setQueryData(workspaceKeys.document(document.id), document);
+      queryClient.setQueryData<Workspace>(workspaceKeys.root, (current) => {
+        if (!current) {
+          return current;
+        }
+
+        return {
+          ...current,
+          documents: [document, ...current.documents],
+        };
+      });
       queryClient.invalidateQueries({ queryKey: workspaceKeys.root });
     },
   });
@@ -86,8 +162,52 @@ export function useDeleteDocument() {
 
   return useMutation({
     mutationFn: deleteDocument,
+    onMutate: async (documentId) => {
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: workspaceKeys.root }),
+        queryClient.cancelQueries({ queryKey: workspaceKeys.document(documentId) }),
+      ]);
+
+      const previousWorkspace = queryClient.getQueryData<Workspace>(
+        workspaceKeys.root,
+      );
+      const previousDocument = queryClient.getQueryData<WorkspaceDocument>(
+        workspaceKeys.document(documentId),
+      );
+
+      queryClient.setQueryData<Workspace>(workspaceKeys.root, (current) => {
+        if (!current) {
+          return current;
+        }
+
+        return {
+          ...current,
+          documents: current.documents.filter(
+            (document) => document.id !== documentId,
+          ),
+        };
+      });
+
+      queryClient.removeQueries({ queryKey: workspaceKeys.document(documentId) });
+
+      return { previousWorkspace, previousDocument };
+    },
+    onError: (_error, documentId, context) => {
+      if (context?.previousWorkspace) {
+        queryClient.setQueryData(workspaceKeys.root, context.previousWorkspace);
+      }
+
+      if (context?.previousDocument) {
+        queryClient.setQueryData(
+          workspaceKeys.document(documentId),
+          context.previousDocument,
+        );
+      }
+    },
     onSuccess: (_result, documentId) => {
       queryClient.removeQueries({ queryKey: workspaceKeys.document(documentId) });
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: workspaceKeys.root });
     },
   });
@@ -100,6 +220,16 @@ export function useDuplicateDocument() {
     mutationFn: duplicateDocument,
     onSuccess: (document) => {
       queryClient.setQueryData(workspaceKeys.document(document.id), document);
+      queryClient.setQueryData<Workspace>(workspaceKeys.root, (current) => {
+        if (!current) {
+          return current;
+        }
+
+        return {
+          ...current,
+          documents: [document, ...current.documents],
+        };
+      });
       queryClient.invalidateQueries({ queryKey: workspaceKeys.root });
     },
   });

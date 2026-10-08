@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { EditorContent } from "@tiptap/react";
-import { Check, Clock, Save, Trash2 } from "lucide-react";
+import { Check, Clock, Save, Trash2, X } from "lucide-react";
 import { AvatarStack } from "../components/AvatarStack";
 import { EditorToolbar } from "../components/EditorToolbar";
 import type { WorkspaceDocument } from "../data/types";
@@ -18,6 +18,7 @@ function DocumentEditor({ document }: { document: WorkspaceDocument }) {
   const deleteDocument = useDeleteDocument();
   const navigate = useNavigate();
   const [title, setTitle] = useState("");
+  const [isDeleteOpen, setDeleteOpen] = useState(false);
   const { editor, isSynced, localUser, presence } = useCollaborativeDocument(
     document.id,
     document.content,
@@ -44,15 +45,7 @@ function DocumentEditor({ document }: { document: WorkspaceDocument }) {
     });
   }
 
-  async function handleDelete() {
-    const confirmed = window.confirm(
-      `Delete "${document.title}"? This cannot be undone.`,
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
+  async function handleConfirmDelete() {
     await deleteDocument.mutateAsync(document.id);
     navigate("/");
   }
@@ -100,7 +93,7 @@ function DocumentEditor({ document }: { document: WorkspaceDocument }) {
               <AvatarStack collaborators={activeCollaborators} />
               <button
                 type="button"
-                onClick={handleDelete}
+                onClick={() => setDeleteOpen(true)}
                 disabled={deleteDocument.isPending}
                 className="grid h-9 w-9 place-items-center rounded-md text-soft transition hover:bg-muted hover:text-accent disabled:cursor-not-allowed disabled:opacity-55"
                 aria-label="Delete document"
@@ -148,6 +141,59 @@ function DocumentEditor({ document }: { document: WorkspaceDocument }) {
           <EditorContent editor={editor} />
         </div>
       </article>
+
+      {isDeleteOpen ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/35 px-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="editor-delete-title"
+            className="w-full max-w-md rounded-xl border border-line bg-panel p-5 shadow-2xl"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-accent/12 text-accent">
+                  <Trash2 size={18} />
+                </span>
+                <div>
+                  <h2 id="editor-delete-title" className="text-lg font-semibold">
+                    Delete document
+                  </h2>
+                  <p className="mt-1 text-sm leading-6 text-soft">
+                    Delete "{document.title}"? This cannot be undone.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDeleteOpen(false)}
+                className="grid h-8 w-8 place-items-center rounded-md text-soft transition hover:bg-muted hover:text-ink"
+                aria-label="Close delete dialog"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDeleteOpen(false)}
+                className="h-9 rounded-md border border-line px-3 text-sm font-medium transition hover:bg-muted"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={deleteDocument.isPending}
+                className="h-9 rounded-md bg-accent px-3 text-sm font-semibold text-white transition hover:bg-accent/90 disabled:opacity-60"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

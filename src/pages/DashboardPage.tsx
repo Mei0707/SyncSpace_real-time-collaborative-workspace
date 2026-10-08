@@ -1,3 +1,4 @@
+import { useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   DndContext,
@@ -11,7 +12,9 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import {
   Activity,
+  AlertCircle,
   CalendarDays,
+  Check,
   Copy,
   FileText,
   GripVertical,
@@ -20,8 +23,10 @@ import {
   MoreHorizontal,
   Pencil,
   Radio,
+  Search,
   Trash2,
   Users,
+  X,
 } from "lucide-react";
 import { AvatarStack } from "../components/AvatarStack";
 import type { DocumentStatus, WorkspaceDocument } from "../data/types";
@@ -32,32 +37,55 @@ import {
   useUpdateDocument,
   useWorkspace,
 } from "../hooks/useWorkspace";
+import { cn } from "../lib/cn";
 import { relativeTime } from "../lib/date";
 
 const columns: Array<{
   id: DocumentStatus;
   title: string;
   tint: string;
+  accent: string;
 }> = [
-  { id: "draft", title: "Draft", tint: "bg-accent/8" },
-  { id: "review", title: "In Review", tint: "bg-brand/8" },
-  { id: "published", title: "Published", tint: "bg-good/8" },
+  {
+    id: "draft",
+    title: "Draft",
+    tint: "bg-muted/40",
+    accent: "bg-soft",
+  },
+  {
+    id: "review",
+    title: "In Review",
+    tint: "bg-brand/8",
+    accent: "bg-brand",
+  },
+  {
+    id: "published",
+    title: "Published",
+    tint: "bg-good/8",
+    accent: "bg-good",
+  },
 ];
+
+const statusLabels = new Map(columns.map((column) => [column.id, column.title]));
 
 interface DocumentBoardCardProps {
   document: WorkspaceDocument;
+  isMenuOpen: boolean;
   onDelete: (document: WorkspaceDocument) => void;
   onDuplicate: (document: WorkspaceDocument) => void;
   onRename: (document: WorkspaceDocument) => void;
   onStatusChange: (document: WorkspaceDocument, status: DocumentStatus) => void;
+  onToggleMenu: (documentId: string) => void;
 }
 
 function DocumentBoardCard({
   document,
+  isMenuOpen,
   onDelete,
   onDuplicate,
   onRename,
   onStatusChange,
+  onToggleMenu,
 }: DocumentBoardCardProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({
@@ -75,10 +103,13 @@ function DocumentBoardCard({
     <article
       ref={setNodeRef}
       style={style}
-      className="group rounded-xl border border-line bg-panel p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-brand/35 hover:shadow-md"
+      className={cn(
+        "group relative rounded-xl border border-line bg-panel p-4 shadow-sm transition",
+        "hover:-translate-y-0.5 hover:border-brand/35 hover:shadow-md",
+      )}
     >
-      <div className="mb-3 flex items-center justify-between gap-3 text-xs text-soft">
-        <span className="inline-flex items-center gap-1.5">
+      <div className="mb-3 flex items-start justify-between gap-3 text-xs text-soft">
+        <span className="inline-flex items-center gap-1.5 pt-1">
           <CalendarDays size={13} />
           {relativeTime(document.updatedAt)}
         </span>
@@ -95,32 +126,70 @@ function DocumentBoardCard({
           <button
             type="button"
             className="grid h-7 w-7 place-items-center rounded-md text-soft transition hover:bg-muted hover:text-ink"
-            aria-label={`Rename ${document.title}`}
-            title="Rename"
-            onClick={() => onRename(document)}
+            aria-label={`Open ${document.title} menu`}
+            onClick={() => onToggleMenu(document.id)}
           >
-            <Pencil size={13} />
-          </button>
-          <button
-            type="button"
-            className="grid h-7 w-7 place-items-center rounded-md text-soft transition hover:bg-muted hover:text-ink"
-            aria-label={`Duplicate ${document.title}`}
-            title="Duplicate"
-            onClick={() => onDuplicate(document)}
-          >
-            <Copy size={13} />
-          </button>
-          <button
-            type="button"
-            className="grid h-7 w-7 place-items-center rounded-md text-soft transition hover:bg-muted hover:text-accent"
-            aria-label={`Delete ${document.title}`}
-            title="Delete"
-            onClick={() => onDelete(document)}
-          >
-            <Trash2 size={13} />
+            <MoreHorizontal size={15} />
           </button>
         </div>
       </div>
+
+      {isMenuOpen ? (
+        <div
+          role="menu"
+          className="absolute right-3 top-12 z-30 w-52 rounded-xl border border-line bg-panel p-1.5 shadow-xl"
+        >
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => onRename(document)}
+            className="flex h-9 w-full items-center gap-2 rounded-md px-2.5 text-left text-sm transition hover:bg-muted"
+          >
+            <Pencil size={14} />
+            Rename
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => onDuplicate(document)}
+            className="flex h-9 w-full items-center gap-2 rounded-md px-2.5 text-left text-sm transition hover:bg-muted"
+          >
+            <Copy size={14} />
+            Duplicate
+          </button>
+          <div className="my-1 border-t border-line" />
+          <p className="px-2.5 py-1 text-[11px] font-semibold uppercase text-soft">
+            Status
+          </p>
+          {columns.map((column) => (
+            <button
+              key={column.id}
+              type="button"
+              role="menuitemradio"
+              aria-checked={document.status === column.id}
+              onClick={() => onStatusChange(document, column.id)}
+              className="flex h-8 w-full items-center justify-between rounded-md px-2.5 text-left text-sm transition hover:bg-muted"
+            >
+              <span className="inline-flex items-center gap-2">
+                <span className={cn("h-2 w-2 rounded-full", column.accent)} />
+                {column.title}
+              </span>
+              {document.status === column.id ? <Check size={14} /> : null}
+            </button>
+          ))}
+          <div className="my-1 border-t border-line" />
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => onDelete(document)}
+            className="flex h-9 w-full items-center gap-2 rounded-md px-2.5 text-left text-sm text-accent transition hover:bg-accent/10"
+          >
+            <Trash2 size={14} />
+            Delete
+          </button>
+        </div>
+      ) : null}
+
       <Link to={`/documents/${document.id}`}>
         <h3 className="text-base font-semibold transition group-hover:text-brand">
           {document.title}
@@ -131,33 +200,19 @@ function DocumentBoardCard({
       </p>
       <div className="mt-4 flex items-center justify-between gap-3">
         <AvatarStack collaborators={document.collaborators} />
-        <div className="flex flex-wrap justify-end gap-1">
-          {document.tags.slice(0, 2).map((tag) => (
-            <span
-              key={tag}
-              className="rounded-md border border-line bg-canvas px-2 py-0.5 text-[11px] text-soft"
-            >
-              #{tag}
-            </span>
-          ))}
-        </div>
+        <span className="rounded-md border border-line bg-canvas px-2 py-0.5 text-[11px] text-soft">
+          {statusLabels.get(document.status)}
+        </span>
       </div>
-      <div className="mt-4 flex items-center justify-between border-t border-line pt-3">
-        <select
-          value={document.status}
-          onChange={(event) =>
-            onStatusChange(document, event.target.value as DocumentStatus)
-          }
-          className="h-7 rounded-md border border-line bg-canvas px-2 text-xs text-soft"
-          aria-label={`Change ${document.title} status`}
-        >
-          {columns.map((column) => (
-            <option key={column.id} value={column.id}>
-              {column.title}
-            </option>
-          ))}
-        </select>
-        <MoreHorizontal size={15} className="text-soft" />
+      <div className="mt-4 flex flex-wrap gap-1 border-t border-line pt-3">
+        {document.tags.slice(0, 3).map((tag) => (
+          <span
+            key={tag}
+            className="rounded-md border border-line bg-canvas px-2 py-0.5 text-[11px] text-soft"
+          >
+            #{tag}
+          </span>
+        ))}
       </div>
     </article>
   );
@@ -166,50 +221,67 @@ function DocumentBoardCard({
 interface BoardColumnProps {
   column: (typeof columns)[number];
   documents: WorkspaceDocument[];
+  isCreating: boolean;
+  openMenuId: string | null;
   onCreateDocument: () => void;
   onDelete: (document: WorkspaceDocument) => void;
   onDuplicate: (document: WorkspaceDocument) => void;
   onRename: (document: WorkspaceDocument) => void;
   onStatusChange: (document: WorkspaceDocument, status: DocumentStatus) => void;
-  isCreating: boolean;
+  onToggleMenu: (documentId: string) => void;
 }
 
 function BoardColumn({
   column,
   documents,
+  isCreating,
+  openMenuId,
   onCreateDocument,
   onDelete,
   onDuplicate,
   onRename,
   onStatusChange,
-  isCreating,
+  onToggleMenu,
 }: BoardColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
 
   return (
     <section
       ref={setNodeRef}
-      className={`min-h-[28rem] rounded-[18px] border border-line ${column.tint} p-4 transition ${
-        isOver ? "ring-2 ring-brand/35" : ""
-      }`}
+      className={cn(
+        "min-h-[28rem] rounded-[18px] border border-line p-4 transition",
+        column.tint,
+        isOver ? "ring-2 ring-brand/35" : "",
+      )}
     >
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="font-semibold">{column.title}</h2>
+        <h2 className="inline-flex items-center gap-2 font-semibold">
+          <span className={cn("h-2.5 w-2.5 rounded-full", column.accent)} />
+          {column.title}
+        </h2>
         <span className="rounded-full bg-panel px-2 py-0.5 text-xs text-soft">
           {documents.length}
         </span>
       </div>
       <div className="space-y-3">
-        {documents.map((document) => (
-          <DocumentBoardCard
-            key={document.id}
-            document={document}
-            onDelete={onDelete}
-            onDuplicate={onDuplicate}
-            onRename={onRename}
-            onStatusChange={onStatusChange}
-          />
-        ))}
+        {documents.length > 0 ? (
+          documents.map((document) => (
+            <DocumentBoardCard
+              key={document.id}
+              document={document}
+              isMenuOpen={openMenuId === document.id}
+              onDelete={onDelete}
+              onDuplicate={onDuplicate}
+              onRename={onRename}
+              onStatusChange={onStatusChange}
+              onToggleMenu={onToggleMenu}
+            />
+          ))
+        ) : (
+          <div className="rounded-xl border border-dashed border-line bg-panel/60 px-4 py-8 text-center text-sm text-soft">
+            No documents
+          </div>
+        )}
       </div>
       <button
         type="button"
@@ -226,6 +298,143 @@ function BoardColumn({
   );
 }
 
+function RenameDialog({
+  document,
+  isSaving,
+  value,
+  onCancel,
+  onChange,
+  onSubmit,
+}: {
+  document: WorkspaceDocument | null;
+  isSaving: boolean;
+  value: string;
+  onCancel: () => void;
+  onChange: (value: string) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  if (!document) {
+    return null;
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/35 px-4">
+      <form
+        onSubmit={onSubmit}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="rename-title"
+        className="w-full max-w-md rounded-xl border border-line bg-panel p-5 shadow-2xl"
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 id="rename-title" className="text-lg font-semibold">
+              Rename document
+            </h2>
+            <p className="mt-1 text-sm text-soft">{document.title}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="grid h-8 w-8 place-items-center rounded-md text-soft transition hover:bg-muted hover:text-ink"
+            aria-label="Close rename dialog"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        <label className="mt-5 block">
+          <span className="mb-2 block text-xs font-semibold uppercase text-soft">
+            Title
+          </span>
+          <input
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            className="h-10 w-full rounded-md border border-line bg-canvas px-3 text-sm"
+            autoFocus
+          />
+        </label>
+
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="h-9 rounded-md border border-line px-3 text-sm font-medium transition hover:bg-muted"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={isSaving || !value.trim()}
+            className="h-9 rounded-md bg-ink px-3 text-sm font-semibold text-panel transition hover:bg-ink/90 disabled:opacity-60"
+          >
+            Save
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function DeleteDialog({
+  document,
+  isDeleting,
+  onCancel,
+  onConfirm,
+}: {
+  document: WorkspaceDocument | null;
+  isDeleting: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  if (!document) {
+    return null;
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/35 px-4">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="delete-title"
+        className="w-full max-w-md rounded-xl border border-line bg-panel p-5 shadow-2xl"
+      >
+        <div className="flex items-start gap-3">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-accent/12 text-accent">
+            <Trash2 size={18} />
+          </span>
+          <div>
+            <h2 id="delete-title" className="text-lg font-semibold">
+              Delete document
+            </h2>
+            <p className="mt-1 text-sm leading-6 text-soft">
+              Delete "{document.title}"? This cannot be undone.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="h-9 rounded-md border border-line px-3 text-sm font-medium transition hover:bg-muted"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={isDeleting}
+            className="h-9 rounded-md bg-accent px-3 text-sm font-semibold text-white transition hover:bg-accent/90 disabled:opacity-60"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function DashboardPage() {
   const { data, isLoading } = useWorkspace();
   const createDocument = useCreateDocument();
@@ -238,13 +447,53 @@ export function DashboardPage() {
       activationConstraint: { distance: 6 },
     }),
   );
-  const documents = data?.documents ?? [];
-  const activeCollaborators = new Map(
-    data?.documents
-      .flatMap((document) => document.collaborators)
-      .filter((collaborator) => collaborator.isOnline)
-      .map((collaborator) => [collaborator.id, collaborator]) ?? [],
+  const documents = useMemo(() => data?.documents ?? [], [data?.documents]);
+  const activeCollaborators = useMemo(
+    () =>
+      new Map(
+        documents
+          .flatMap((document) => document.collaborators)
+          .filter((collaborator) => collaborator.isOnline)
+          .map((collaborator) => [collaborator.id, collaborator]),
+      ),
+    [documents],
   );
+  const [boardQuery, setBoardQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<DocumentStatus | "all">("all");
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [renamingDocument, setRenamingDocument] =
+    useState<WorkspaceDocument | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [deletingDocument, setDeletingDocument] =
+    useState<WorkspaceDocument | null>(null);
+  const [boardError, setBoardError] = useState<string | null>(null);
+
+  const filteredDocuments = useMemo(() => {
+    const search = boardQuery.trim().toLowerCase();
+
+    return documents.filter((document) => {
+      const matchesStatus =
+        statusFilter === "all" || document.status === statusFilter;
+      const matchesSearch =
+        !search ||
+        [
+          document.title,
+          document.summary,
+          document.tags.join(" "),
+          statusLabels.get(document.status),
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(search);
+
+      return matchesStatus && matchesSearch;
+    });
+  }, [boardQuery, documents, statusFilter]);
+
+  const visibleColumns =
+    statusFilter === "all"
+      ? columns
+      : columns.filter((column) => column.id === statusFilter);
 
   if (isLoading) {
     return (
@@ -255,6 +504,7 @@ export function DashboardPage() {
   }
 
   async function handleCreateDocument() {
+    setBoardError(null);
     const document = await createDocument.mutateAsync("Untitled document");
     navigate(`/documents/${document.id}`);
   }
@@ -267,10 +517,17 @@ export function DashboardPage() {
       return;
     }
 
-    await updateDocument.mutateAsync({
-      id: document.id,
-      status,
-    });
+    setBoardError(null);
+    setOpenMenuId(null);
+
+    try {
+      await updateDocument.mutateAsync({
+        id: document.id,
+        status,
+      });
+    } catch {
+      setBoardError("Could not update the document status.");
+    }
   }
 
   async function handleDragEnd(event: DragEndEvent) {
@@ -288,38 +545,84 @@ export function DashboardPage() {
     await handleStatusChange(document, nextStatus);
   }
 
-  async function handleRename(document: WorkspaceDocument) {
-    const title = window.prompt("Rename document", document.title);
+  function handleRenameRequest(document: WorkspaceDocument) {
+    setBoardError(null);
+    setOpenMenuId(null);
+    setRenamingDocument(document);
+    setRenameValue(document.title);
+  }
 
-    if (!title || title.trim() === document.title) {
+  async function handleRenameSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!renamingDocument) {
       return;
     }
 
-    await updateDocument.mutateAsync({
-      id: document.id,
-      title: title.trim(),
-    });
+    const title = renameValue.trim();
+
+    if (!title || title === renamingDocument.title) {
+      setRenamingDocument(null);
+      return;
+    }
+
+    setBoardError(null);
+
+    try {
+      await updateDocument.mutateAsync({
+        id: renamingDocument.id,
+        title,
+      });
+      setRenamingDocument(null);
+    } catch {
+      setBoardError("Could not rename the document.");
+    }
   }
 
   async function handleDuplicate(document: WorkspaceDocument) {
-    const copy = await duplicateDocument.mutateAsync(document.id);
-    navigate(`/documents/${copy.id}`);
+    setBoardError(null);
+    setOpenMenuId(null);
+
+    try {
+      const copy = await duplicateDocument.mutateAsync(document.id);
+      navigate(`/documents/${copy.id}`);
+    } catch {
+      setBoardError("Could not duplicate the document.");
+    }
   }
 
-  async function handleDelete(document: WorkspaceDocument) {
-    const confirmed = window.confirm(
-      `Delete "${document.title}"? This cannot be undone.`,
-    );
+  function handleDeleteRequest(document: WorkspaceDocument) {
+    setBoardError(null);
+    setOpenMenuId(null);
+    setDeletingDocument(document);
+  }
 
-    if (!confirmed) {
+  async function handleConfirmDelete() {
+    if (!deletingDocument) {
       return;
     }
 
-    await deleteDocument.mutateAsync(document.id);
+    setBoardError(null);
+
+    try {
+      await deleteDocument.mutateAsync(deletingDocument.id);
+      setDeletingDocument(null);
+    } catch {
+      setBoardError("Could not delete the document.");
+    }
   }
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-7 px-4 py-5 md:px-6 md:py-6">
+      {openMenuId ? (
+        <button
+          type="button"
+          className="fixed inset-0 z-10 cursor-default"
+          aria-label="Close document menu"
+          onClick={() => setOpenMenuId(null)}
+        />
+      ) : null}
+
       <section className="rounded-[18px] bg-panel px-1 pb-2">
         <div className="flex flex-col gap-6 border-b border-line pb-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">
@@ -334,9 +637,7 @@ export function DashboardPage() {
           <div className="grid min-w-[min(100%,28rem)] grid-cols-3 divide-x divide-line rounded-xl border border-line bg-canvas/60">
             <div className="px-4 py-3">
               <FileText className="mb-2 text-brand" size={18} />
-              <p className="text-2xl font-semibold">
-                {documents.length}
-              </p>
+              <p className="text-2xl font-semibold">{documents.length}</p>
               <p className="text-xs text-soft">Docs</p>
             </div>
             <div className="px-4 py-3">
@@ -392,20 +693,99 @@ export function DashboardPage() {
             </div>
           </div>
 
-          <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-            <div className="grid gap-4 lg:grid-cols-3">
+          <div className="mb-4 flex flex-col gap-3 rounded-xl border border-line bg-panel p-3 md:flex-row md:items-center md:justify-between">
+            <label className="relative min-w-0 flex-1">
+              <span className="sr-only">Search board</span>
+              <Search
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-soft"
+                size={15}
+              />
+              <input
+                value={boardQuery}
+                onChange={(event) => setBoardQuery(event.target.value)}
+                className="h-9 w-full rounded-md border border-line bg-canvas pl-9 pr-3 text-sm placeholder:text-soft/80"
+                placeholder="Search board"
+              />
+            </label>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setStatusFilter("all")}
+                className={cn(
+                  "h-9 rounded-md border px-3 text-sm font-medium transition",
+                  statusFilter === "all"
+                    ? "border-ink bg-ink text-panel"
+                    : "border-line text-soft hover:bg-muted hover:text-ink",
+                )}
+              >
+                All
+              </button>
               {columns.map((column) => (
+                <button
+                  key={column.id}
+                  type="button"
+                  onClick={() => setStatusFilter(column.id)}
+                  className={cn(
+                    "inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm font-medium transition",
+                    statusFilter === column.id
+                      ? "border-ink bg-ink text-panel"
+                      : "border-line text-soft hover:bg-muted hover:text-ink",
+                  )}
+                >
+                  <span className={cn("h-2 w-2 rounded-full", column.accent)} />
+                  {column.title}
+                </button>
+              ))}
+              {boardQuery || statusFilter !== "all" ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBoardQuery("");
+                    setStatusFilter("all");
+                  }}
+                  className="grid h-9 w-9 place-items-center rounded-md border border-line text-soft transition hover:bg-muted hover:text-ink"
+                  aria-label="Clear board filters"
+                >
+                  <X size={15} />
+                </button>
+              ) : null}
+            </div>
+          </div>
+
+          {boardError ? (
+            <div className="mb-4 flex items-center gap-2 rounded-xl border border-accent/30 bg-accent/8 px-3 py-2 text-sm text-accent">
+              <AlertCircle size={16} />
+              {boardError}
+            </div>
+          ) : null}
+
+          <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+            <div
+              className={cn(
+                "grid gap-4",
+                visibleColumns.length === 1
+                  ? "lg:grid-cols-[minmax(0,28rem)]"
+                  : "lg:grid-cols-3",
+              )}
+            >
+              {visibleColumns.map((column) => (
                 <BoardColumn
                   key={column.id}
                   column={column}
-                  documents={documents.filter(
+                  documents={filteredDocuments.filter(
                     (document) => document.status === column.id,
                   )}
+                  openMenuId={openMenuId}
                   onCreateDocument={handleCreateDocument}
-                  onDelete={handleDelete}
+                  onDelete={handleDeleteRequest}
                   onDuplicate={handleDuplicate}
-                  onRename={handleRename}
+                  onRename={handleRenameRequest}
                   onStatusChange={handleStatusChange}
+                  onToggleMenu={(documentId) =>
+                    setOpenMenuId((current) =>
+                      current === documentId ? null : documentId,
+                    )
+                  }
                   isCreating={createDocument.isPending}
                 />
               ))}
@@ -420,12 +800,16 @@ export function DashboardPage() {
             </p>
             <div className="mt-4 grid grid-cols-2 gap-3">
               <div className="rounded-xl border border-line bg-canvas/70 p-3">
-                <p className="text-2xl font-semibold">{activeCollaborators.size}</p>
+                <p className="text-2xl font-semibold">
+                  {activeCollaborators.size}
+                </p>
                 <p className="text-xs text-soft">Online now</p>
               </div>
               <div className="rounded-xl border border-line bg-canvas/70 p-3">
-                <p className="text-2xl font-semibold">92%</p>
-                <p className="text-xs text-soft">Sync health</p>
+                <p className="text-2xl font-semibold">
+                  {filteredDocuments.length}
+                </p>
+                <p className="text-xs text-soft">Visible docs</p>
               </div>
             </div>
           </div>
@@ -481,6 +865,21 @@ export function DashboardPage() {
           </div>
         </aside>
       </section>
+
+      <RenameDialog
+        document={renamingDocument}
+        value={renameValue}
+        isSaving={updateDocument.isPending}
+        onChange={setRenameValue}
+        onCancel={() => setRenamingDocument(null)}
+        onSubmit={handleRenameSubmit}
+      />
+      <DeleteDialog
+        document={deletingDocument}
+        isDeleting={deleteDocument.isPending}
+        onCancel={() => setDeletingDocument(null)}
+        onConfirm={handleConfirmDelete}
+      />
     </div>
   );
 }
