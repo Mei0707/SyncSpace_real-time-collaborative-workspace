@@ -2,8 +2,16 @@ import http from "node:http";
 import cors from "cors";
 import express from "express";
 import type { AuthUser } from "./auth";
-import { AuthError, deleteSession, getUserBySessionToken, loginUser, registerUser } from "./auth";
+import {
+  AuthError,
+  deleteSession,
+  getUserBySessionToken,
+  getWorkspaceMembership,
+  loginUser,
+  registerUser,
+} from "./auth";
 import { attachCollaborationServer } from "./collaboration";
+import type { WorkspaceRole } from "../src/data/types";
 import {
   createDocument,
   deleteDocument,
@@ -57,6 +65,43 @@ function requireAuth(
   next();
 }
 
+function getMembershipOrReject(request: express.Request, response: express.Response) {
+  const membership = getWorkspaceMembership(
+    getDatabase(),
+    (request as AuthenticatedRequest).user.id,
+  );
+
+  if (!membership) {
+    response.status(403).json({ message: "Workspace access denied" });
+    return null;
+  }
+
+  return membership;
+}
+
+function canWrite(role: WorkspaceRole) {
+  return role === "owner" || role === "admin" || role === "editor";
+}
+
+function canDeleteAny(role: WorkspaceRole) {
+  return role === "owner" || role === "admin";
+}
+
+function requireWriter(request: express.Request, response: express.Response) {
+  const membership = getMembershipOrReject(request, response);
+
+  if (!membership) {
+    return null;
+  }
+
+  if (!canWrite(membership.role)) {
+    response.status(403).json({ message: "Editor access required" });
+    return null;
+  }
+
+  return membership;
+}
+
 app.get("/api/health", (_request, response) => {
   response.json({ ok: true });
 });
@@ -99,7 +144,13 @@ app.post("/api/auth/logout", requireAuth, (request, response) => {
 
 app.get("/api/workspace", requireAuth, async (_request, response, next) => {
   try {
-    response.json(await getWorkspace());
+    const membership = getMembershipOrReject(_request, response);
+
+    if (!membership) {
+      return;
+    }
+
+    response.json(await getWorkspace(membership.role));
   } catch (error) {
     next(error);
   }
@@ -107,6 +158,10 @@ app.get("/api/workspace", requireAuth, async (_request, response, next) => {
 
 app.get("/api/documents/:documentId", requireAuth, async (request, response, next) => {
   try {
+    if (!getMembershipOrReject(request, response)) {
+      return;
+    }
+
     const document = await getDocument(getRouteParam(request.params.documentId));
 
     if (!document) {
@@ -122,6 +177,10 @@ app.get("/api/documents/:documentId", requireAuth, async (request, response, nex
 
 app.post("/api/documents", requireAuth, async (request, response, next) => {
   try {
+    if (!requireWriter(request, response)) {
+      return;
+    }
+
     response
       .status(201)
       .json(
@@ -140,6 +199,10 @@ app.post(
   requireAuth,
   async (request, response, next) => {
     try {
+      if (!requireWriter(request, response)) {
+        return;
+      }
+
       const document = await duplicateDocument(
         getRouteParam(request.params.documentId),
         (request as AuthenticatedRequest).user.id,
@@ -159,9 +222,17 @@ app.post(
 
 app.patch("/api/documents/:documentId", requireAuth, async (request, response, next) => {
   try {
+    if (!requireWriter(request, response)) {
+      return;
+    }
+
     const document = await updateDocument({
       id: getRouteParam(request.params.documentId),
-      ...request.body,
+      title: request.body.title,
+      content: request.body.content,
+      summary: request.body.summary,
+      status: request.body.status,
+      tags: request.body.tags,
     });
 
     if (!document) {
@@ -177,7 +248,29 @@ app.patch("/api/documents/:documentId", requireAuth, async (request, response, n
 
 app.delete("/api/documents/:documentId", requireAuth, async (request, response, next) => {
   try {
-    const wasDeleted = await deleteDocument(getRouteParam(request.params.documentId));
+    const membership = getMembershipOrReject(request, response);
+
+    if (!membership) {
+      return;
+    }
+
+    const documentId = getRouteParam(request.params.documentId);
+    const document = await getDocument(documentId);
+
+    if (!document) {
+      response.status(404).json({ message: "Document not found" });
+      return;
+    }
+
+    if (
+      !canDeleteAny(membership.role) &&
+      document.ownerId !== (request as AuthenticatedRequest).user.id
+    ) {
+      response.status(403).json({ message: "Delete access denied" });
+      return;
+    }
+
+    const wasDeleted = await deleteDocument(documentId);
 
     if (!wasDeleted) {
       response.status(404).json({ message: "Document not found" });

@@ -6,6 +6,7 @@ import {
   timingSafeEqual,
 } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
+import type { WorkspaceRole } from "../src/data/types";
 
 const sessionDays = 7;
 const colors = ["#1a735c", "#2962ff", "#b36b00", "#8b5cf6", "#c2410c", "#0f766e"];
@@ -38,6 +39,13 @@ interface SessionRow {
   token_hash: string;
   user_id: string;
   expires_at: string;
+  created_at: string;
+}
+
+interface MembershipRow {
+  workspace_id: string;
+  user_id: string;
+  role: WorkspaceRole;
   created_at: string;
 }
 
@@ -155,23 +163,91 @@ export function initializeAuthSchema(database: DatabaseSync) {
       created_at TEXT NOT NULL,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS workspace_memberships (
+      workspace_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      role TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (workspace_id, user_id),
+      FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
   `);
+}
+
+function getDefaultWorkspaceId(database: DatabaseSync) {
+  const row = database
+    .prepare("SELECT id FROM workspaces ORDER BY id LIMIT 1")
+    .get() as { id: string } | undefined;
+
+  return row?.id ?? null;
+}
+
+export function ensureWorkspaceMembership(
+  database: DatabaseSync,
+  userId: string,
+  role: WorkspaceRole,
+  workspaceId = getDefaultWorkspaceId(database),
+) {
+  if (!workspaceId) {
+    return null;
+  }
+
+  database
+    .prepare(
+      `
+      INSERT OR IGNORE INTO workspace_memberships (
+        workspace_id, user_id, role, created_at
+      )
+      VALUES (?, ?, ?, ?)
+    `,
+    )
+    .run(workspaceId, userId, role, new Date().toISOString());
+
+  return getWorkspaceMembership(database, userId, workspaceId);
+}
+
+export function getWorkspaceMembership(
+  database: DatabaseSync,
+  userId: string,
+  workspaceId = getDefaultWorkspaceId(database),
+) {
+  if (!workspaceId) {
+    return null;
+  }
+
+  const row = database
+    .prepare(
+      `
+      SELECT workspace_id, user_id, role, created_at
+      FROM workspace_memberships
+      WHERE workspace_id = ? AND user_id = ?
+    `,
+    )
+    .get(workspaceId, userId) as MembershipRow | undefined;
+
+  return row ?? null;
 }
 
 export function ensureDemoUser(database: DatabaseSync) {
   const existing = getUserByEmail(database, "demo@syncspace.local");
 
   if (existing) {
-    return toAuthUser(existing);
+    const user = toAuthUser(existing);
+    ensureWorkspaceMembership(database, user.id, "owner");
+    return user;
   }
 
-  return insertUser(database, {
+  const user = insertUser(database, {
     id: "u1",
     name: "Maya Chen",
     email: "demo@syncspace.local",
     password: "password",
     color: "#1a735c",
   });
+  ensureWorkspaceMembership(database, user.id, "owner");
+  return user;
 }
 
 export async function registerUser(
@@ -179,6 +255,7 @@ export async function registerUser(
   input: { name: string; email: string; password: string },
 ) {
   const user = insertUser(database, input);
+  ensureWorkspaceMembership(database, user.id, "editor");
   return createSession(database, user.id);
 }
 

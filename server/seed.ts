@@ -11,6 +11,7 @@ export const seedWorkspace: Workspace = {
   id: "workspace-syncspace",
   name: "SyncSpace Product",
   description: "Design notes, launch planning, and collaborative documents.",
+  currentUserRole: "owner",
   documents: [
     {
       id: "doc-roadmap",

@@ -4,7 +4,8 @@ import { Server as HttpServer } from "node:http";
 import { WebSocketServer, type WebSocket } from "ws";
 import * as Y from "yjs";
 import type { AuthUser } from "./auth";
-import { getUserBySessionToken } from "./auth";
+import { getUserBySessionToken, getWorkspaceMembership } from "./auth";
+import type { WorkspaceRole } from "../src/data/types";
 import {
   getDatabase,
   getDocument,
@@ -20,6 +21,7 @@ interface CollaborationClient {
   documentId: string;
   socket: WebSocket;
   user: PresenceUser;
+  role: WorkspaceRole;
 }
 
 const documents = new Map<string, Y.Doc>();
@@ -106,6 +108,10 @@ function toUint8Array(data: WebSocket.RawData) {
   return new Uint8Array(Buffer.concat(data));
 }
 
+function canWrite(role: WorkspaceRole) {
+  return role === "owner" || role === "admin" || role === "editor";
+}
+
 async function handleJsonMessage(client: CollaborationClient, raw: string) {
   const message = JSON.parse(raw) as
     | { type: "presence"; user: PresenceUser }
@@ -116,6 +122,16 @@ async function handleJsonMessage(client: CollaborationClient, raw: string) {
   }
 
   if (message.type === "snapshot") {
+    if (!canWrite(client.role)) {
+      client.socket.send(
+        JSON.stringify({
+          type: "error",
+          message: "Editor access required",
+        }),
+      );
+      return;
+    }
+
     const text = message.text.trim();
     await updateDocument({
       id: client.documentId,
@@ -151,6 +167,13 @@ export function attachCollaborationServer(server: HttpServer) {
       return;
     }
 
+    const membership = getWorkspaceMembership(getDatabase(), user.id);
+
+    if (!membership) {
+      socket.close(1008, "Workspace access denied");
+      return;
+    }
+
     const document = await getDocument(documentId);
 
     if (!document) {
@@ -163,6 +186,7 @@ export function attachCollaborationServer(server: HttpServer) {
       documentId,
       socket,
       user,
+      role: membership.role,
     };
     clients.set(socket, client);
     broadcastPresence(documentId);
@@ -184,6 +208,17 @@ export function attachCollaborationServer(server: HttpServer) {
         }
 
         const update = toUint8Array(data);
+
+        if (!canWrite(client.role)) {
+          socket.send(
+            JSON.stringify({
+              type: "error",
+              message: "Editor access required",
+            }),
+          );
+          return;
+        }
+
         Y.applyUpdate(doc, update, socket);
         schedulePersist(documentId, doc);
         broadcastUpdate(documentId, socket, update);

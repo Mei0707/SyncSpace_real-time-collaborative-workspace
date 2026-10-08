@@ -73,8 +73,8 @@ export function getDatabase() {
     );
   `);
   initializeAuthSchema(db);
-  ensureDemoUser(db);
   seedIfEmpty();
+  ensureDemoUser(db);
 
   return db;
 }
@@ -163,7 +163,7 @@ function slugify(value: string) {
     .replace(/(^-|-$)/g, "");
 }
 
-export async function getWorkspace() {
+export async function getWorkspace(currentUserRole: Workspace["currentUserRole"]) {
   const database = getDatabase();
   const workspace = database
     .prepare("SELECT * FROM workspaces LIMIT 1")
@@ -181,6 +181,7 @@ export async function getWorkspace() {
     id: workspace.id,
     name: workspace.name,
     description: workspace.description,
+    currentUserRole,
     documents: documents.map(toDocument),
   };
 }

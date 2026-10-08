@@ -12,6 +12,8 @@ This implementation now includes the Phase 1 foundation and the first collaborat
 - Node/Express REST API for workspaces and documents
 - SQLite-backed metadata persistence in `data/syncspace.sqlite`
 - Email/password authentication with hashed passwords and database-backed sessions
+- Workspace membership roles: owner, admin, editor, and viewer
+- Server-side authorization for workspace reads, document writes, deletes, and collaboration edits
 - TipTap rich-text editor with Yjs shared document state
 - Authenticated WebSocket collaboration transport with reconnect status
 - Persisted Yjs snapshots in SQLite
@@ -19,7 +21,8 @@ This implementation now includes the Phase 1 foundation and the first collaborat
 - Drag-and-drop document board with status updates
 - Optimistic board mutations with rollback on API failure
 - Board search, status filters, and card menus for rename, duplicate, delete, and status changes
-- Signed-in workspace identity and logout from the top bar
+- Signed-in workspace identity, role display, and logout from the top bar
+- Role-aware UI controls for read-only members and delete permissions
 - Searchable document list and lazy-loaded editable document page
 - Theme switching, live sync status, and active collaborator presence
 - Vitest, React Testing Library, and Playwright collaboration tests
@@ -49,6 +52,6 @@ Demo credentials are seeded automatically for local development:
 ## Remaining Implementation Phases
 
 1. Move from local SQLite to PostgreSQL for deployed multi-user environments.
-2. Add workspace roles and document-level authorization rules.
+2. Add member invitation and role-management screens.
 3. Add collaborator cursor rendering.
 4. Add CI browser installation/cache strategy for Playwright.

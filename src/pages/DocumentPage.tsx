@@ -4,16 +4,37 @@ import { EditorContent } from "@tiptap/react";
 import { Check, Clock, Save, Trash2, X } from "lucide-react";
 import { AvatarStack } from "../components/AvatarStack";
 import { EditorToolbar } from "../components/EditorToolbar";
-import type { WorkspaceDocument } from "../data/types";
+import type { WorkspaceDocument, WorkspaceRole } from "../data/types";
+import { useAuth } from "../hooks/authContext";
 import { useCollaborativeDocument } from "../hooks/useCollaborativeDocument";
 import {
   useDeleteDocument,
   useDocument,
   useUpdateDocument,
+  useWorkspace,
 } from "../hooks/useWorkspace";
 import { relativeTime } from "../lib/date";
 
-function DocumentEditor({ document }: { document: WorkspaceDocument }) {
+function canWrite(role: WorkspaceRole) {
+  return role === "owner" || role === "admin" || role === "editor";
+}
+
+function canDeleteDocument(
+  role: WorkspaceRole,
+  document: WorkspaceDocument,
+  userId: string | undefined,
+) {
+  return role === "owner" || role === "admin" || document.ownerId === userId;
+}
+
+function DocumentEditor({
+  document,
+  workspaceRole,
+}: {
+  document: WorkspaceDocument;
+  workspaceRole: WorkspaceRole;
+}) {
+  const { user } = useAuth();
   const updateDocument = useUpdateDocument();
   const deleteDocument = useDeleteDocument();
   const navigate = useNavigate();
@@ -23,17 +44,23 @@ function DocumentEditor({ document }: { document: WorkspaceDocument }) {
     document.id,
     document.content,
   );
+  const canEdit = canWrite(workspaceRole);
+  const canDelete = canDeleteDocument(workspaceRole, document, user?.id);
 
   useEffect(() => {
     setTitle(document.title);
   }, [document]);
+
+  useEffect(() => {
+    editor?.setEditable(canEdit);
+  }, [canEdit, editor]);
 
   const hasTitleChanges = useMemo(() => {
     return document.title !== title;
   }, [document.title, title]);
 
   async function handleSave() {
-    if (!hasTitleChanges) {
+    if (!canEdit || !hasTitleChanges) {
       return;
     }
 
@@ -46,6 +73,10 @@ function DocumentEditor({ document }: { document: WorkspaceDocument }) {
   }
 
   async function handleConfirmDelete() {
+    if (!canDelete) {
+      return;
+    }
+
     await deleteDocument.mutateAsync(document.id);
     navigate("/");
   }
@@ -73,6 +104,7 @@ function DocumentEditor({ document }: { document: WorkspaceDocument }) {
                 id="document-title"
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
+                disabled={!canEdit}
                 className="w-full rounded-md border border-transparent bg-transparent px-0 text-3xl font-semibold tracking-normal text-ink transition focus:border-line focus:bg-canvas focus:px-2 md:text-4xl"
               />
               <div className="mt-3 flex flex-wrap items-center gap-2.5 text-sm text-soft">
@@ -86,41 +118,56 @@ function DocumentEditor({ document }: { document: WorkspaceDocument }) {
                 <span className="rounded-md bg-muted px-2 py-1 text-xs font-medium">
                   {isSynced ? "Editor synced" : "Opening editor"}
                 </span>
+                <span className="rounded-md bg-muted px-2 py-1 text-xs font-medium capitalize">
+                  {workspaceRole}
+                </span>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
               <AvatarStack collaborators={activeCollaborators} />
-              <button
-                type="button"
-                onClick={() => setDeleteOpen(true)}
-                disabled={deleteDocument.isPending}
-                className="grid h-9 w-9 place-items-center rounded-md text-soft transition hover:bg-muted hover:text-accent disabled:cursor-not-allowed disabled:opacity-55"
-                aria-label="Delete document"
-                title="Delete document"
-              >
-                <Trash2 size={16} />
-              </button>
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={!hasTitleChanges || updateDocument.isPending}
-                className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-ink px-3.5 text-sm font-semibold text-panel transition hover:bg-ink/90 disabled:cursor-not-allowed disabled:opacity-55"
-              >
-                {hasTitleChanges ? <Save size={16} /> : <Check size={16} />}
-                {updateDocument.isPending
-                  ? "Saving"
-                  : hasTitleChanges
-                    ? "Save"
-                    : "Saved"}
-              </button>
+              {canDelete ? (
+                <button
+                  type="button"
+                  onClick={() => setDeleteOpen(true)}
+                  disabled={deleteDocument.isPending}
+                  className="grid h-9 w-9 place-items-center rounded-md text-soft transition hover:bg-muted hover:text-accent disabled:cursor-not-allowed disabled:opacity-55"
+                  aria-label="Delete document"
+                  title="Delete document"
+                >
+                  <Trash2 size={16} />
+                </button>
+              ) : null}
+              {canEdit ? (
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={!hasTitleChanges || updateDocument.isPending}
+                  className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-ink px-3.5 text-sm font-semibold text-panel transition hover:bg-ink/90 disabled:cursor-not-allowed disabled:opacity-55"
+                >
+                  {hasTitleChanges ? <Save size={16} /> : <Check size={16} />}
+                  {updateDocument.isPending
+                    ? "Saving"
+                    : hasTitleChanges
+                      ? "Save"
+                      : "Saved"}
+                </button>
+              ) : (
+                <span className="rounded-md border border-line px-3 py-2 text-sm text-soft">
+                  Read-only
+                </span>
+              )}
             </div>
           </div>
         </header>
 
         <div className="space-y-4 bg-canvas/55 px-4 py-4 md:px-5">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <EditorToolbar editor={editor} />
+            {canEdit ? (
+              <EditorToolbar editor={editor} />
+            ) : (
+              <p className="text-sm text-soft">Viewing with read-only access.</p>
+            )}
 
             <div className="flex flex-wrap gap-2">
               {document.tags.length ? (
@@ -201,6 +248,7 @@ function DocumentEditor({ document }: { document: WorkspaceDocument }) {
 export function DocumentPage() {
   const { documentId } = useParams();
   const { data: document, isError, isLoading } = useDocument(documentId);
+  const { data: workspace } = useWorkspace();
 
   if (!documentId) {
     return <Navigate to="/" replace />;
@@ -227,5 +275,10 @@ export function DocumentPage() {
     );
   }
 
-  return <DocumentEditor document={document} />;
+  return (
+    <DocumentEditor
+      document={document}
+      workspaceRole={workspace?.currentUserRole ?? "viewer"}
+    />
+  );
 }

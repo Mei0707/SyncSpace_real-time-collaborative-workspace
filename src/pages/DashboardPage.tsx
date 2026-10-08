@@ -29,7 +29,12 @@ import {
   X,
 } from "lucide-react";
 import { AvatarStack } from "../components/AvatarStack";
-import type { DocumentStatus, WorkspaceDocument } from "../data/types";
+import type {
+  DocumentStatus,
+  WorkspaceDocument,
+  WorkspaceRole,
+} from "../data/types";
+import { useAuth } from "../hooks/authContext";
 import {
   useCreateDocument,
   useDeleteDocument,
@@ -68,8 +73,22 @@ const columns: Array<{
 
 const statusLabels = new Map(columns.map((column) => [column.id, column.title]));
 
+function canWrite(role: WorkspaceRole) {
+  return role === "owner" || role === "admin" || role === "editor";
+}
+
+function canDeleteDocument(
+  role: WorkspaceRole,
+  document: WorkspaceDocument,
+  userId: string | undefined,
+) {
+  return role === "owner" || role === "admin" || document.ownerId === userId;
+}
+
 interface DocumentBoardCardProps {
   document: WorkspaceDocument;
+  canDelete: boolean;
+  canEdit: boolean;
   isMenuOpen: boolean;
   onDelete: (document: WorkspaceDocument) => void;
   onDuplicate: (document: WorkspaceDocument) => void;
@@ -80,6 +99,8 @@ interface DocumentBoardCardProps {
 
 function DocumentBoardCard({
   document,
+  canDelete,
+  canEdit,
   isMenuOpen,
   onDelete,
   onDuplicate,
@@ -91,6 +112,7 @@ function DocumentBoardCard({
     useDraggable({
       id: document.id,
       data: { status: document.status },
+      disabled: !canEdit,
     });
 
   const style = {
@@ -113,25 +135,29 @@ function DocumentBoardCard({
           <CalendarDays size={13} />
           {relativeTime(document.updatedAt)}
         </span>
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            className="grid h-7 w-7 cursor-grab place-items-center rounded-md text-soft transition hover:bg-muted hover:text-ink active:cursor-grabbing"
-            aria-label={`Drag ${document.title}`}
-            {...attributes}
-            {...listeners}
-          >
-            <GripVertical size={14} />
-          </button>
-          <button
-            type="button"
-            className="grid h-7 w-7 place-items-center rounded-md text-soft transition hover:bg-muted hover:text-ink"
-            aria-label={`Open ${document.title} menu`}
-            onClick={() => onToggleMenu(document.id)}
-          >
-            <MoreHorizontal size={15} />
-          </button>
-        </div>
+        {canEdit || canDelete ? (
+          <div className="flex items-center gap-1">
+            {canEdit ? (
+              <button
+                type="button"
+                className="grid h-7 w-7 cursor-grab place-items-center rounded-md text-soft transition hover:bg-muted hover:text-ink active:cursor-grabbing"
+                aria-label={`Drag ${document.title}`}
+                {...attributes}
+                {...listeners}
+              >
+                <GripVertical size={14} />
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="grid h-7 w-7 place-items-center rounded-md text-soft transition hover:bg-muted hover:text-ink"
+              aria-label={`Open ${document.title} menu`}
+              onClick={() => onToggleMenu(document.id)}
+            >
+              <MoreHorizontal size={15} />
+            </button>
+          </div>
+        ) : null}
       </div>
 
       {isMenuOpen ? (
@@ -139,54 +165,60 @@ function DocumentBoardCard({
           role="menu"
           className="absolute right-3 top-12 z-30 w-52 rounded-xl border border-line bg-panel p-1.5 shadow-xl"
         >
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => onRename(document)}
-            className="flex h-9 w-full items-center gap-2 rounded-md px-2.5 text-left text-sm transition hover:bg-muted"
-          >
-            <Pencil size={14} />
-            Rename
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => onDuplicate(document)}
-            className="flex h-9 w-full items-center gap-2 rounded-md px-2.5 text-left text-sm transition hover:bg-muted"
-          >
-            <Copy size={14} />
-            Duplicate
-          </button>
-          <div className="my-1 border-t border-line" />
-          <p className="px-2.5 py-1 text-[11px] font-semibold uppercase text-soft">
-            Status
-          </p>
-          {columns.map((column) => (
+          {canEdit ? (
+            <>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => onRename(document)}
+                className="flex h-9 w-full items-center gap-2 rounded-md px-2.5 text-left text-sm transition hover:bg-muted"
+              >
+                <Pencil size={14} />
+                Rename
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => onDuplicate(document)}
+                className="flex h-9 w-full items-center gap-2 rounded-md px-2.5 text-left text-sm transition hover:bg-muted"
+              >
+                <Copy size={14} />
+                Duplicate
+              </button>
+              <div className="my-1 border-t border-line" />
+              <p className="px-2.5 py-1 text-[11px] font-semibold uppercase text-soft">
+                Status
+              </p>
+              {columns.map((column) => (
+                <button
+                  key={column.id}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={document.status === column.id}
+                  onClick={() => onStatusChange(document, column.id)}
+                  className="flex h-8 w-full items-center justify-between rounded-md px-2.5 text-left text-sm transition hover:bg-muted"
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <span className={cn("h-2 w-2 rounded-full", column.accent)} />
+                    {column.title}
+                  </span>
+                  {document.status === column.id ? <Check size={14} /> : null}
+                </button>
+              ))}
+            </>
+          ) : null}
+          {canEdit && canDelete ? <div className="my-1 border-t border-line" /> : null}
+          {canDelete ? (
             <button
-              key={column.id}
               type="button"
-              role="menuitemradio"
-              aria-checked={document.status === column.id}
-              onClick={() => onStatusChange(document, column.id)}
-              className="flex h-8 w-full items-center justify-between rounded-md px-2.5 text-left text-sm transition hover:bg-muted"
+              role="menuitem"
+              onClick={() => onDelete(document)}
+              className="flex h-9 w-full items-center gap-2 rounded-md px-2.5 text-left text-sm text-accent transition hover:bg-accent/10"
             >
-              <span className="inline-flex items-center gap-2">
-                <span className={cn("h-2 w-2 rounded-full", column.accent)} />
-                {column.title}
-              </span>
-              {document.status === column.id ? <Check size={14} /> : null}
+              <Trash2 size={14} />
+              Delete
             </button>
-          ))}
-          <div className="my-1 border-t border-line" />
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => onDelete(document)}
-            className="flex h-9 w-full items-center gap-2 rounded-md px-2.5 text-left text-sm text-accent transition hover:bg-accent/10"
-          >
-            <Trash2 size={14} />
-            Delete
-          </button>
+          ) : null}
         </div>
       ) : null}
 
@@ -221,6 +253,8 @@ function DocumentBoardCard({
 interface BoardColumnProps {
   column: (typeof columns)[number];
   documents: WorkspaceDocument[];
+  canDeleteDocument: (document: WorkspaceDocument) => boolean;
+  canEdit: boolean;
   isCreating: boolean;
   openMenuId: string | null;
   onCreateDocument: () => void;
@@ -234,6 +268,8 @@ interface BoardColumnProps {
 function BoardColumn({
   column,
   documents,
+  canDeleteDocument,
+  canEdit,
   isCreating,
   openMenuId,
   onCreateDocument,
@@ -269,6 +305,8 @@ function BoardColumn({
             <DocumentBoardCard
               key={document.id}
               document={document}
+              canDelete={canDeleteDocument(document)}
+              canEdit={canEdit}
               isMenuOpen={openMenuId === document.id}
               onDelete={onDelete}
               onDuplicate={onDuplicate}
@@ -283,17 +321,21 @@ function BoardColumn({
           </div>
         )}
       </div>
-      <button
-        type="button"
-        onClick={onCreateDocument}
-        disabled={isCreating}
-        className="mt-4 inline-flex items-center gap-2 text-sm text-soft transition hover:text-ink disabled:opacity-50"
-      >
-        <span className="grid h-5 w-5 place-items-center rounded-full bg-panel text-xs">
-          +
-        </span>
-        Add document
-      </button>
+      {canEdit ? (
+        <button
+          type="button"
+          onClick={onCreateDocument}
+          disabled={isCreating}
+          className="mt-4 inline-flex items-center gap-2 text-sm text-soft transition hover:text-ink disabled:opacity-50"
+        >
+          <span className="grid h-5 w-5 place-items-center rounded-full bg-panel text-xs">
+            +
+          </span>
+          Add document
+        </button>
+      ) : (
+        <p className="mt-4 text-sm text-soft">Read-only</p>
+      )}
     </section>
   );
 }
@@ -437,6 +479,7 @@ function DeleteDialog({
 
 export function DashboardPage() {
   const { data, isLoading } = useWorkspace();
+  const { user } = useAuth();
   const createDocument = useCreateDocument();
   const deleteDocument = useDeleteDocument();
   const duplicateDocument = useDuplicateDocument();
@@ -467,6 +510,10 @@ export function DashboardPage() {
   const [deletingDocument, setDeletingDocument] =
     useState<WorkspaceDocument | null>(null);
   const [boardError, setBoardError] = useState<string | null>(null);
+  const workspaceRole = data?.currentUserRole ?? "viewer";
+  const canEditWorkspace = canWrite(workspaceRole);
+  const canDeleteFromWorkspace = (document: WorkspaceDocument) =>
+    canDeleteDocument(workspaceRole, document, user?.id);
 
   const filteredDocuments = useMemo(() => {
     const search = boardQuery.trim().toLowerCase();
@@ -504,6 +551,10 @@ export function DashboardPage() {
   }
 
   async function handleCreateDocument() {
+    if (!canEditWorkspace) {
+      return;
+    }
+
     setBoardError(null);
     const document = await createDocument.mutateAsync("Untitled document");
     navigate(`/documents/${document.id}`);
@@ -513,7 +564,7 @@ export function DashboardPage() {
     document: WorkspaceDocument,
     status: DocumentStatus,
   ) {
-    if (document.status === status) {
+    if (!canEditWorkspace || document.status === status) {
       return;
     }
 
@@ -531,6 +582,10 @@ export function DashboardPage() {
   }
 
   async function handleDragEnd(event: DragEndEvent) {
+    if (!canEditWorkspace) {
+      return;
+    }
+
     const document = documents.find((item) => item.id === event.active.id);
     const nextStatus = event.over?.id as DocumentStatus | undefined;
 
@@ -546,6 +601,10 @@ export function DashboardPage() {
   }
 
   function handleRenameRequest(document: WorkspaceDocument) {
+    if (!canEditWorkspace) {
+      return;
+    }
+
     setBoardError(null);
     setOpenMenuId(null);
     setRenamingDocument(document);
@@ -580,6 +639,10 @@ export function DashboardPage() {
   }
 
   async function handleDuplicate(document: WorkspaceDocument) {
+    if (!canEditWorkspace) {
+      return;
+    }
+
     setBoardError(null);
     setOpenMenuId(null);
 
@@ -592,6 +655,10 @@ export function DashboardPage() {
   }
 
   function handleDeleteRequest(document: WorkspaceDocument) {
+    if (!canDeleteFromWorkspace(document)) {
+      return;
+    }
+
     setBoardError(null);
     setOpenMenuId(null);
     setDeletingDocument(document);
@@ -684,6 +751,9 @@ export function DashboardPage() {
             </div>
             <div className="flex items-center gap-2">
               <AvatarStack collaborators={[...activeCollaborators.values()]} />
+              <span className="h-9 rounded-md border border-line bg-canvas px-3 py-2 text-xs font-semibold capitalize text-soft">
+                {workspaceRole}
+              </span>
               <button
                 type="button"
                 className="h-9 rounded-md bg-ink px-3 text-sm font-semibold text-panel"
@@ -772,6 +842,8 @@ export function DashboardPage() {
                 <BoardColumn
                   key={column.id}
                   column={column}
+                  canDeleteDocument={canDeleteFromWorkspace}
+                  canEdit={canEditWorkspace}
                   documents={filteredDocuments.filter(
                     (document) => document.status === column.id,
                   )}
