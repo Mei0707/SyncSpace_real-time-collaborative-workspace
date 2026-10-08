@@ -44,6 +44,7 @@ import {
   useWorkspace,
 } from "../hooks/useWorkspace";
 import { useWorkspaceActivity } from "../hooks/useWorkspaceFeatures";
+import { useVirtualList } from "../hooks/useVirtualList";
 import { cn } from "../lib/cn";
 import { relativeTime } from "../lib/date";
 
@@ -283,6 +284,17 @@ function BoardColumn({
   onToggleMenu,
 }: BoardColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
+  const virtualList = useVirtualList({
+    itemCount: documents.length,
+    itemHeight: 196,
+    overscan: 5,
+    threshold: 45,
+    defaultViewportHeight: 760,
+  });
+  const visibleDocuments = documents.slice(
+    virtualList.startIndex,
+    virtualList.endIndex,
+  );
 
   return (
     <section
@@ -302,22 +314,39 @@ function BoardColumn({
           {documents.length}
         </span>
       </div>
-      <div className="space-y-3">
+      <div
+        ref={virtualList.containerRef}
+        onScroll={virtualList.handleScroll}
+        className={cn(
+          "space-y-3",
+          virtualList.isVirtualized
+            ? "max-h-[min(46rem,calc(100vh-21rem))] overflow-y-auto pr-1"
+            : "",
+        )}
+      >
         {documents.length > 0 ? (
-          documents.map((document) => (
-            <DocumentBoardCard
-              key={document.id}
-              document={document}
-              canDelete={canDeleteDocument(document)}
-              canEdit={canEdit}
-              isMenuOpen={openMenuId === document.id}
-              onDelete={onDelete}
-              onDuplicate={onDuplicate}
-              onRename={onRename}
-              onStatusChange={onStatusChange}
-              onToggleMenu={onToggleMenu}
-            />
-          ))
+          <>
+            {virtualList.paddingBefore ? (
+              <div style={{ height: virtualList.paddingBefore }} />
+            ) : null}
+            {visibleDocuments.map((document) => (
+              <DocumentBoardCard
+                key={document.id}
+                document={document}
+                canDelete={canDeleteDocument(document)}
+                canEdit={canEdit}
+                isMenuOpen={openMenuId === document.id}
+                onDelete={onDelete}
+                onDuplicate={onDuplicate}
+                onRename={onRename}
+                onStatusChange={onStatusChange}
+                onToggleMenu={onToggleMenu}
+              />
+            ))}
+            {virtualList.paddingAfter ? (
+              <div style={{ height: virtualList.paddingAfter }} />
+            ) : null}
+          </>
         ) : (
           <div className="rounded-xl border border-dashed border-line bg-panel/60 px-4 py-8 text-center text-sm text-soft">
             No documents
@@ -489,6 +518,18 @@ function DocumentListView({
   canEdit: boolean;
   onStatusChange: (document: WorkspaceDocument, status: DocumentStatus) => void;
 }) {
+  const virtualList = useVirtualList({
+    itemCount: documents.length,
+    itemHeight: 70,
+    overscan: 8,
+    threshold: 90,
+    defaultViewportHeight: 720,
+  });
+  const visibleDocuments = documents.slice(
+    virtualList.startIndex,
+    virtualList.endIndex,
+  );
+
   return (
     <section className="overflow-hidden rounded-xl border border-line bg-panel">
       <div className="grid grid-cols-[1fr_8rem_9rem] gap-3 border-b border-line px-4 py-3 text-xs font-semibold uppercase text-soft md:grid-cols-[1fr_9rem_10rem_9rem]">
@@ -497,8 +538,20 @@ function DocumentListView({
         <span className="hidden md:block">Updated</span>
         <span>Owner</span>
       </div>
-      <div className="divide-y divide-line">
-        {documents.map((document) => (
+      <div
+        ref={virtualList.containerRef}
+        onScroll={virtualList.handleScroll}
+        className={cn(
+          "divide-y divide-line",
+          virtualList.isVirtualized
+            ? "max-h-[min(46rem,calc(100vh-20rem))] overflow-y-auto"
+            : "",
+        )}
+      >
+        {virtualList.paddingBefore ? (
+          <div style={{ height: virtualList.paddingBefore }} />
+        ) : null}
+        {visibleDocuments.map((document) => (
           <div
             key={document.id}
             className="grid grid-cols-[1fr_8rem_9rem] gap-3 px-4 py-3 text-sm md:grid-cols-[1fr_9rem_10rem_9rem]"
@@ -536,6 +589,9 @@ function DocumentListView({
             <span className="truncate text-soft">{document.ownerId}</span>
           </div>
         ))}
+        {virtualList.paddingAfter ? (
+          <div style={{ height: virtualList.paddingAfter }} />
+        ) : null}
       </div>
     </section>
   );

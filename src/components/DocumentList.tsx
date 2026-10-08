@@ -3,12 +3,24 @@ import { FileText } from "lucide-react";
 import type { WorkspaceDocument } from "../data/types";
 import { relativeTime } from "../lib/date";
 import { cn } from "../lib/cn";
+import { useVirtualList } from "../hooks/useVirtualList";
 
 export function DocumentList({
   documents,
 }: {
   documents: WorkspaceDocument[];
 }) {
+  const virtualList = useVirtualList({
+    itemCount: documents.length,
+    itemHeight: 86,
+    overscan: 6,
+    defaultViewportHeight: 620,
+  });
+  const visibleDocuments = documents.slice(
+    virtualList.startIndex,
+    virtualList.endIndex,
+  );
+
   if (documents.length === 0) {
     return (
       <div className="rounded-md border border-dashed border-line px-4 py-8 text-center text-sm text-soft">
@@ -18,8 +30,18 @@ export function DocumentList({
   }
 
   return (
-    <div className="space-y-1">
-      {documents.map((document) => (
+    <div
+      ref={virtualList.containerRef}
+      onScroll={virtualList.handleScroll}
+      className={cn(
+        "space-y-1",
+        virtualList.isVirtualized ? "h-full overflow-y-auto pr-1" : "",
+      )}
+    >
+      {virtualList.paddingBefore ? (
+        <div style={{ height: virtualList.paddingBefore }} />
+      ) : null}
+      {visibleDocuments.map((document) => (
         <NavLink
           key={document.id}
           to={`/documents/${document.id}`}
@@ -52,6 +74,9 @@ export function DocumentList({
           </span>
         </NavLink>
       ))}
+      {virtualList.paddingAfter ? (
+        <div style={{ height: virtualList.paddingAfter }} />
+      ) : null}
     </div>
   );
 }
