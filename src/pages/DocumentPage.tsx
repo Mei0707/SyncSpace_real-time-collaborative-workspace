@@ -1,7 +1,24 @@
-import { useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type ChangeEvent,
+  type FormEvent,
+} from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { EditorContent } from "@tiptap/react";
-import { Check, Clock, Save, Trash2, X } from "lucide-react";
+import {
+  Check,
+  Clock,
+  Download,
+  History,
+  MessageSquare,
+  Paperclip,
+  Save,
+  Trash2,
+  Upload,
+  X,
+} from "lucide-react";
 import { AvatarStack } from "../components/AvatarStack";
 import { EditorToolbar } from "../components/EditorToolbar";
 import type { WorkspaceDocument, WorkspaceRole } from "../data/types";
@@ -13,6 +30,14 @@ import {
   useUpdateDocument,
   useWorkspace,
 } from "../hooks/useWorkspace";
+import {
+  useCreateDocumentAttachment,
+  useCreateDocumentComment,
+  useDeleteDocumentAttachment,
+  useDocumentAttachments,
+  useDocumentComments,
+  useDocumentHistory,
+} from "../hooks/useWorkspaceFeatures";
 import { relativeTime } from "../lib/date";
 
 function canWrite(role: WorkspaceRole) {
@@ -37,8 +62,19 @@ function DocumentEditor({
   const { user } = useAuth();
   const updateDocument = useUpdateDocument();
   const deleteDocument = useDeleteDocument();
+  const createComment = useCreateDocumentComment();
+  const createAttachment = useCreateDocumentAttachment();
+  const deleteAttachment = useDeleteDocumentAttachment(document.id);
+  const { data: comments = [] } = useDocumentComments(document.id);
+  const { data: attachments = [] } = useDocumentAttachments(document.id);
+  const { data: history = [] } = useDocumentHistory(document.id);
   const navigate = useNavigate();
   const [title, setTitle] = useState("");
+  const [commentBody, setCommentBody] = useState("");
+  const [sidePanel, setSidePanel] = useState<"comments" | "files" | "history">(
+    "comments",
+  );
+  const [panelError, setPanelError] = useState<string | null>(null);
   const [isDeleteOpen, setDeleteOpen] = useState(false);
   const { editor, isSynced, localUser, presence } = useCollaborativeDocument(
     document.id,
@@ -81,6 +117,56 @@ function DocumentEditor({
     navigate("/");
   }
 
+  async function handleCommentSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!commentBody.trim()) {
+      return;
+    }
+
+    setPanelError(null);
+
+    try {
+      await createComment.mutateAsync({
+        documentId: document.id,
+        body: commentBody,
+      });
+      setCommentBody("");
+    } catch (error) {
+      setPanelError(error instanceof Error ? error.message : "Could not add comment.");
+    }
+  }
+
+  async function handleFileUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    setPanelError(null);
+
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.addEventListener("load", () => resolve(String(reader.result)));
+        reader.addEventListener("error", () => reject(reader.error));
+        reader.readAsDataURL(file);
+      });
+
+      await createAttachment.mutateAsync({
+        documentId: document.id,
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        dataUrl,
+      });
+      event.target.value = "";
+    } catch (error) {
+      setPanelError(error instanceof Error ? error.message : "Could not upload file.");
+    }
+  }
+
   const activeCollaborators = [
     ...document.collaborators,
     ...presence
@@ -92,7 +178,7 @@ function DocumentEditor({
   ];
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 py-6 md:px-8 md:py-9">
+    <div className="mx-auto w-full max-w-7xl px-4 py-6 md:px-8 md:py-9">
       <article className="overflow-hidden rounded-md border border-line bg-panel shadow-sm">
         <header className="border-b border-line px-5 py-5 md:px-7">
           <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
@@ -188,6 +274,195 @@ function DocumentEditor({
           <EditorContent editor={editor} />
         </div>
       </article>
+
+      <section className="mt-5 grid gap-4 lg:grid-cols-[1fr_24rem]">
+        <div className="rounded-md border border-line bg-panel p-4">
+          <div className="mb-3 flex flex-wrap gap-2">
+            {[
+              ["comments", MessageSquare, `Comments ${comments.length}`],
+              ["files", Paperclip, `Files ${attachments.length}`],
+              ["history", History, `History ${history.length}`],
+            ].map(([id, Icon, label]) => (
+              <button
+                key={String(id)}
+                type="button"
+                onClick={() => setSidePanel(id as "comments" | "files" | "history")}
+                className={`inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm font-medium transition ${
+                  sidePanel === id
+                    ? "border-ink bg-ink text-panel"
+                    : "border-line text-soft hover:bg-muted hover:text-ink"
+                }`}
+              >
+                <Icon size={15} />
+                {String(label)}
+              </button>
+            ))}
+          </div>
+
+          {panelError ? (
+            <div className="mb-3 rounded-md border border-accent/30 bg-accent/8 px-3 py-2 text-sm text-accent">
+              {panelError}
+            </div>
+          ) : null}
+
+          {sidePanel === "comments" ? (
+            <div className="space-y-4">
+              <form onSubmit={handleCommentSubmit} className="space-y-2">
+                <textarea
+                  value={commentBody}
+                  onChange={(event) => setCommentBody(event.target.value)}
+                  className="min-h-24 w-full rounded-md border border-line bg-canvas px-3 py-2 text-sm"
+                  placeholder="Comment or mention someone with @email@example.com"
+                />
+                <button
+                  type="submit"
+                  disabled={createComment.isPending || !commentBody.trim()}
+                  className="h-9 rounded-md bg-ink px-3 text-sm font-semibold text-panel disabled:opacity-60"
+                >
+                  Add comment
+                </button>
+              </form>
+              <div className="space-y-3">
+                {comments.length ? (
+                  comments.map((comment) => (
+                    <article
+                      key={comment.id}
+                      className="rounded-md border border-line bg-canvas p-3"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="grid h-7 w-7 place-items-center rounded-full text-[10px] font-semibold text-white"
+                          style={{ backgroundColor: comment.author.color }}
+                        >
+                          {comment.author.name
+                            .split(" ")
+                            .map((part) => part[0])
+                            .join("")
+                            .slice(0, 2)}
+                        </span>
+                        <div>
+                          <p className="text-sm font-semibold">
+                            {comment.author.name}
+                          </p>
+                          <p className="text-xs text-soft">
+                            {relativeTime(comment.createdAt)}
+                          </p>
+                        </div>
+                      </div>
+                      <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-soft">
+                        {comment.body}
+                      </p>
+                    </article>
+                  ))
+                ) : (
+                  <p className="py-8 text-center text-sm text-soft">
+                    No comments yet.
+                  </p>
+                )}
+              </div>
+            </div>
+          ) : null}
+
+          {sidePanel === "files" ? (
+            <div className="space-y-4">
+              {canEdit ? (
+                <label className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-md bg-ink px-3 text-sm font-semibold text-panel">
+                  <Upload size={15} />
+                  Upload file
+                  <input type="file" className="sr-only" onChange={handleFileUpload} />
+                </label>
+              ) : null}
+              <div className="space-y-2">
+                {attachments.length ? (
+                  attachments.map((attachment) => (
+                    <div
+                      key={attachment.id}
+                      className="flex items-center justify-between gap-3 rounded-md border border-line bg-canvas p-3"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold">
+                          {attachment.name}
+                        </p>
+                        <p className="text-xs text-soft">
+                          {Math.max(1, Math.round(attachment.size / 1024))} KB ·{" "}
+                          {relativeTime(attachment.createdAt)}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <a
+                          href={attachment.dataUrl}
+                          download={attachment.name}
+                          className="grid h-8 w-8 place-items-center rounded-md text-soft transition hover:bg-muted hover:text-ink"
+                          aria-label={`Download ${attachment.name}`}
+                        >
+                          <Download size={15} />
+                        </a>
+                        {canEdit ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void deleteAttachment.mutateAsync(attachment.id)
+                            }
+                            className="grid h-8 w-8 place-items-center rounded-md text-soft transition hover:bg-muted hover:text-accent"
+                            aria-label={`Delete ${attachment.name}`}
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="py-8 text-center text-sm text-soft">
+                    No files attached.
+                  </p>
+                )}
+              </div>
+            </div>
+          ) : null}
+
+          {sidePanel === "history" ? (
+            <div className="space-y-3">
+              {history.length ? (
+                history.map((version) => (
+                  <article
+                    key={version.id}
+                    className="rounded-md border border-line bg-canvas p-3"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold">{version.title}</p>
+                        <p className="text-xs text-soft">
+                          {version.author.name} · {relativeTime(version.createdAt)}
+                        </p>
+                      </div>
+                      <span className="rounded-md border border-line px-2 py-1 text-xs capitalize text-soft">
+                        {version.status}
+                      </span>
+                    </div>
+                    <p className="mt-2 line-clamp-2 text-sm leading-6 text-soft">
+                      {version.summary || version.content}
+                    </p>
+                  </article>
+                ))
+              ) : (
+                <p className="py-8 text-center text-sm text-soft">
+                  History will appear after edits are saved.
+                </p>
+              )}
+            </div>
+          ) : null}
+        </div>
+
+        <aside className="rounded-md border border-line bg-panel p-4">
+          <h2 className="text-sm font-semibold">Document Workspace</h2>
+          <div className="mt-4 space-y-3 text-sm text-soft">
+            <p>Use comments for discussion and @email mentions.</p>
+            <p>Attach files for context, references, and handoff material.</p>
+            <p>History snapshots are captured when document metadata or content is saved.</p>
+          </div>
+        </aside>
+      </section>
 
       {isDeleteOpen ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/35 px-4">

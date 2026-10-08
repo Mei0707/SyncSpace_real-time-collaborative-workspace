@@ -76,6 +76,30 @@ vi.stubGlobal(
       return new Response(null, { status: 204 });
     }
 
+    if (url.endsWith("/api/notifications")) {
+      return Response.json([]);
+    }
+
+    if (url.endsWith("/api/workspace/activity")) {
+      return Response.json([]);
+    }
+
+    if (url.includes("/comments")) {
+      return Response.json(init?.method === "POST" ? {} : [], {
+        status: init?.method === "POST" ? 201 : 200,
+      });
+    }
+
+    if (url.includes("/attachments")) {
+      return Response.json(init?.method === "POST" ? {} : [], {
+        status: init?.method === "POST" ? 201 : 200,
+      });
+    }
+
+    if (url.includes("/history")) {
+      return Response.json([]);
+    }
+
     if (url.endsWith("/api/workspace")) {
       return Response.json(mockWorkspace);
     }

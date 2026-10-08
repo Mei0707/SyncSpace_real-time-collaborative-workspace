@@ -19,11 +19,20 @@ import { attachCollaborationServer } from "./collaboration";
 import type { WorkspaceRole } from "../src/data/types";
 import {
   createDocument,
+  createDocumentAttachment,
+  createDocumentComment,
   deleteDocument,
+  deleteDocumentAttachment,
   duplicateDocument,
   getDocument,
   getDatabase,
   getWorkspace,
+  listDocumentAttachments,
+  listDocumentComments,
+  listDocumentHistory,
+  listNotifications,
+  listWorkspaceActivity,
+  markNotificationRead,
   updateDocument,
 } from "./store";
 
@@ -200,6 +209,52 @@ app.get("/api/workspace/members", requireAuth, (request, response, next) => {
   }
 });
 
+app.get("/api/workspace/activity", requireAuth, async (request, response, next) => {
+  try {
+    if (!getMembershipOrReject(request, response)) {
+      return;
+    }
+
+    response.json(await listWorkspaceActivity());
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/notifications", requireAuth, async (request, response, next) => {
+  try {
+    if (!getMembershipOrReject(request, response)) {
+      return;
+    }
+
+    response.json(await listNotifications((request as AuthenticatedRequest).user.id));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.patch("/api/notifications/:notificationId/read", requireAuth, async (request, response, next) => {
+  try {
+    if (!getMembershipOrReject(request, response)) {
+      return;
+    }
+
+    const wasUpdated = await markNotificationRead(
+      getRouteParam(request.params.notificationId),
+      (request as AuthenticatedRequest).user.id,
+    );
+
+    if (!wasUpdated) {
+      response.status(404).json({ message: "Notification not found" });
+      return;
+    }
+
+    response.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.post("/api/workspace/invitations", requireAuth, (request, response, next) => {
   try {
     if (!requireMemberManager(request, response)) {
@@ -329,7 +384,7 @@ app.patch("/api/documents/:documentId", requireAuth, async (request, response, n
       summary: request.body.summary,
       status: request.body.status,
       tags: request.body.tags,
-    });
+    }, (request as AuthenticatedRequest).user.id);
 
     if (!document) {
       response.status(404).json({ message: "Document not found" });
@@ -374,6 +429,112 @@ app.delete("/api/documents/:documentId", requireAuth, async (request, response, 
     }
 
     response.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/documents/:documentId/comments", requireAuth, async (request, response, next) => {
+  try {
+    if (!getMembershipOrReject(request, response)) {
+      return;
+    }
+
+    response.json(await listDocumentComments(getRouteParam(request.params.documentId)));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/documents/:documentId/comments", requireAuth, async (request, response, next) => {
+  try {
+    if (!getMembershipOrReject(request, response)) {
+      return;
+    }
+
+    const comment = await createDocumentComment({
+      documentId: getRouteParam(request.params.documentId),
+      authorId: (request as AuthenticatedRequest).user.id,
+      body: request.body.body ?? "",
+    });
+
+    if (!comment) {
+      response.status(404).json({ message: "Document not found" });
+      return;
+    }
+
+    response.status(201).json(comment);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/documents/:documentId/attachments", requireAuth, async (request, response, next) => {
+  try {
+    if (!getMembershipOrReject(request, response)) {
+      return;
+    }
+
+    response.json(await listDocumentAttachments(getRouteParam(request.params.documentId)));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/documents/:documentId/attachments", requireAuth, async (request, response, next) => {
+  try {
+    if (!requireWriter(request, response)) {
+      return;
+    }
+
+    const attachment = await createDocumentAttachment({
+      documentId: getRouteParam(request.params.documentId),
+      uploaderId: (request as AuthenticatedRequest).user.id,
+      name: request.body.name ?? "",
+      type: request.body.type ?? "",
+      size: Number(request.body.size ?? 0),
+      dataUrl: request.body.dataUrl ?? "",
+    });
+
+    if (!attachment) {
+      response.status(404).json({ message: "Document not found" });
+      return;
+    }
+
+    response.status(201).json(attachment);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete("/api/attachments/:attachmentId", requireAuth, async (request, response, next) => {
+  try {
+    if (!requireWriter(request, response)) {
+      return;
+    }
+
+    const wasDeleted = await deleteDocumentAttachment(
+      getRouteParam(request.params.attachmentId),
+    );
+
+    if (!wasDeleted) {
+      response.status(404).json({ message: "Attachment not found" });
+      return;
+    }
+
+    response.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/documents/:documentId/history", requireAuth, async (request, response, next) => {
+  try {
+    if (!getMembershipOrReject(request, response)) {
+      return;
+    }
+
+    response.json(await listDocumentHistory(getRouteParam(request.params.documentId)));
   } catch (error) {
     next(error);
   }

@@ -21,7 +21,12 @@ import { DocumentList } from "./DocumentList";
 import { StatusPill } from "./StatusPill";
 import { useAuth } from "../hooks/authContext";
 import { useCreateDocument, useWorkspaceSearch } from "../hooks/useWorkspace";
+import {
+  useMarkNotificationRead,
+  useNotifications,
+} from "../hooks/useWorkspaceFeatures";
 import { cn } from "../lib/cn";
+import { relativeTime } from "../lib/date";
 import { useUiStore } from "../stores/useUiStore";
 
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
@@ -197,6 +202,10 @@ function TopBar({ mobileSidebar }: { mobileSidebar: ReactNode }) {
     toggleTheme,
   } = useUiStore();
   const { logout, user } = useAuth();
+  const [isNotificationsOpen, setNotificationsOpen] = useState(false);
+  const { data: notifications = [] } = useNotifications();
+  const markNotificationRead = useMarkNotificationRead();
+  const unreadCount = notifications.filter((notification) => !notification.readAt).length;
 
   return (
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-line bg-panel/92 px-4 backdrop-blur md:px-5">
@@ -218,13 +227,60 @@ function TopBar({ mobileSidebar }: { mobileSidebar: ReactNode }) {
       </div>
 
       <div className="flex items-center gap-1.5">
-        <button
-          type="button"
-          className="hidden h-8 w-8 place-items-center rounded-md text-soft transition hover:bg-muted hover:text-ink sm:grid"
-          aria-label="Notifications"
-        >
-          <Bell size={16} />
-        </button>
+        <div className="relative hidden sm:block">
+          <button
+            type="button"
+            onClick={() => setNotificationsOpen((current) => !current)}
+            className="grid h-8 w-8 place-items-center rounded-md text-soft transition hover:bg-muted hover:text-ink"
+            aria-label="Notifications"
+          >
+            <Bell size={16} />
+            {unreadCount ? (
+              <span className="absolute right-0.5 top-0.5 h-2 w-2 rounded-full bg-accent" />
+            ) : null}
+          </button>
+          {isNotificationsOpen ? (
+            <div className="absolute right-0 top-10 z-40 w-80 rounded-xl border border-line bg-panel p-2 shadow-xl">
+              <div className="flex items-center justify-between px-2 py-2">
+                <p className="text-sm font-semibold">Notifications</p>
+                <span className="text-xs text-soft">{unreadCount} unread</span>
+              </div>
+              <div className="max-h-80 overflow-y-auto">
+                {notifications.length ? (
+                  notifications.slice(0, 8).map((notification) => (
+                    <Link
+                      key={notification.id}
+                      to={
+                        notification.documentId
+                          ? `/documents/${notification.documentId}`
+                          : "/"
+                      }
+                      onClick={() => {
+                        setNotificationsOpen(false);
+                        if (!notification.readAt) {
+                          void markNotificationRead.mutateAsync(notification.id);
+                        }
+                      }}
+                      className={cn(
+                        "block rounded-md px-2 py-2 text-sm transition hover:bg-muted",
+                        !notification.readAt ? "bg-brand/8" : "",
+                      )}
+                    >
+                      <p className="line-clamp-2">{notification.message}</p>
+                      <p className="mt-1 text-xs text-soft">
+                        {relativeTime(notification.createdAt)}
+                      </p>
+                    </Link>
+                  ))
+                ) : (
+                  <p className="px-2 py-6 text-center text-sm text-soft">
+                    No notifications.
+                  </p>
+                )}
+              </div>
+            </div>
+          ) : null}
+        </div>
         <button
           type="button"
           className="hidden h-8 w-8 place-items-center rounded-md text-soft transition hover:bg-muted hover:text-ink sm:grid"

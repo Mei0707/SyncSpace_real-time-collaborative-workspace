@@ -33,6 +33,7 @@ import type {
   DocumentStatus,
   WorkspaceDocument,
   WorkspaceRole,
+  WorkspaceActivity,
 } from "../data/types";
 import { useAuth } from "../hooks/authContext";
 import {
@@ -42,6 +43,7 @@ import {
   useUpdateDocument,
   useWorkspace,
 } from "../hooks/useWorkspace";
+import { useWorkspaceActivity } from "../hooks/useWorkspaceFeatures";
 import { cn } from "../lib/cn";
 import { relativeTime } from "../lib/date";
 
@@ -72,6 +74,7 @@ const columns: Array<{
 ];
 
 const statusLabels = new Map(columns.map((column) => [column.id, column.title]));
+type DashboardView = "board" | "list" | "activity";
 
 function canWrite(role: WorkspaceRole) {
   return role === "owner" || role === "admin" || role === "editor";
@@ -477,9 +480,110 @@ function DeleteDialog({
   );
 }
 
+function DocumentListView({
+  documents,
+  canEdit,
+  onStatusChange,
+}: {
+  documents: WorkspaceDocument[];
+  canEdit: boolean;
+  onStatusChange: (document: WorkspaceDocument, status: DocumentStatus) => void;
+}) {
+  return (
+    <section className="overflow-hidden rounded-xl border border-line bg-panel">
+      <div className="grid grid-cols-[1fr_8rem_9rem] gap-3 border-b border-line px-4 py-3 text-xs font-semibold uppercase text-soft md:grid-cols-[1fr_9rem_10rem_9rem]">
+        <span>Document</span>
+        <span>Status</span>
+        <span className="hidden md:block">Updated</span>
+        <span>Owner</span>
+      </div>
+      <div className="divide-y divide-line">
+        {documents.map((document) => (
+          <div
+            key={document.id}
+            className="grid grid-cols-[1fr_8rem_9rem] gap-3 px-4 py-3 text-sm md:grid-cols-[1fr_9rem_10rem_9rem]"
+          >
+            <Link
+              to={`/documents/${document.id}`}
+              className="min-w-0 font-semibold hover:text-brand"
+            >
+              <span className="block truncate">{document.title}</span>
+              <span className="mt-1 block truncate text-xs font-normal text-soft">
+                {document.summary}
+              </span>
+            </Link>
+            {canEdit ? (
+              <select
+                value={document.status}
+                onChange={(event) =>
+                  onStatusChange(document, event.target.value as DocumentStatus)
+                }
+                className="h-8 rounded-md border border-line bg-canvas px-2 text-xs capitalize"
+                aria-label={`Change ${document.title} status`}
+              >
+                {columns.map((column) => (
+                  <option key={column.id} value={column.id}>
+                    {column.title}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="text-soft">{statusLabels.get(document.status)}</span>
+            )}
+            <span className="hidden text-soft md:block">
+              {relativeTime(document.updatedAt)}
+            </span>
+            <span className="truncate text-soft">{document.ownerId}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ActivityFeed({ activity }: { activity: WorkspaceActivity[] }) {
+  return (
+    <section className="rounded-xl border border-line bg-panel p-4">
+      <div className="space-y-3">
+        {activity.length ? (
+          activity.map((item) => (
+            <Link
+              key={item.id}
+              to={item.documentId ? `/documents/${item.documentId}` : "/"}
+              className="flex gap-3 rounded-md p-2 transition hover:bg-muted"
+            >
+              <span
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[11px] font-semibold text-white"
+                style={{ backgroundColor: item.actor.color }}
+              >
+                {item.actor.name
+                  .split(" ")
+                  .map((part) => part[0])
+                  .join("")
+                  .slice(0, 2)}
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-medium">{item.message}</span>
+                <span className="mt-1 block text-xs text-soft">
+                  {item.actor.name} · {relativeTime(item.createdAt)}
+                </span>
+              </span>
+            </Link>
+          ))
+        ) : (
+          <p className="py-10 text-center text-sm text-soft">
+            Activity will appear as the team works.
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
 export function DashboardPage() {
   const { data, isLoading } = useWorkspace();
   const { user } = useAuth();
+  const { data: activity = [] } = useWorkspaceActivity();
   const createDocument = useCreateDocument();
   const deleteDocument = useDeleteDocument();
   const duplicateDocument = useDuplicateDocument();
@@ -502,6 +606,7 @@ export function DashboardPage() {
     [documents],
   );
   const [boardQuery, setBoardQuery] = useState("");
+  const [activeView, setActiveView] = useState<DashboardView>("board");
   const [statusFilter, setStatusFilter] = useState<DocumentStatus | "all">("all");
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [renamingDocument, setRenamingDocument] =
@@ -729,21 +834,39 @@ export function DashboardPage() {
             <div className="flex items-center gap-6 border-b border-line md:border-0">
               <button
                 type="button"
-                className="inline-flex h-10 items-center gap-2 border-b-2 border-brand px-1 text-sm font-semibold text-brand"
+                onClick={() => setActiveView("board")}
+                className={cn(
+                  "inline-flex h-10 items-center gap-2 border-b-2 px-1 text-sm font-semibold",
+                  activeView === "board"
+                    ? "border-brand text-brand"
+                    : "border-transparent text-soft",
+                )}
               >
                 <Activity size={15} />
                 Board
               </button>
               <button
                 type="button"
-                className="inline-flex h-10 items-center gap-2 px-1 text-sm text-soft"
+                onClick={() => setActiveView("list")}
+                className={cn(
+                  "inline-flex h-10 items-center gap-2 border-b-2 px-1 text-sm font-semibold",
+                  activeView === "list"
+                    ? "border-brand text-brand"
+                    : "border-transparent text-soft",
+                )}
               >
                 <List size={15} />
                 List
               </button>
               <button
                 type="button"
-                className="inline-flex h-10 items-center gap-2 px-1 text-sm text-soft"
+                onClick={() => setActiveView("activity")}
+                className={cn(
+                  "inline-flex h-10 items-center gap-2 border-b-2 px-1 text-sm font-semibold",
+                  activeView === "activity"
+                    ? "border-brand text-brand"
+                    : "border-transparent text-soft",
+                )}
               >
                 <MessageSquare size={15} />
                 Activity
@@ -829,40 +952,52 @@ export function DashboardPage() {
             </div>
           ) : null}
 
-          <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-            <div
-              className={cn(
-                "grid gap-4",
-                visibleColumns.length === 1
-                  ? "lg:grid-cols-[minmax(0,28rem)]"
-                  : "lg:grid-cols-3",
-              )}
-            >
-              {visibleColumns.map((column) => (
-                <BoardColumn
-                  key={column.id}
-                  column={column}
-                  canDeleteDocument={canDeleteFromWorkspace}
-                  canEdit={canEditWorkspace}
-                  documents={filteredDocuments.filter(
-                    (document) => document.status === column.id,
-                  )}
-                  openMenuId={openMenuId}
-                  onCreateDocument={handleCreateDocument}
-                  onDelete={handleDeleteRequest}
-                  onDuplicate={handleDuplicate}
-                  onRename={handleRenameRequest}
-                  onStatusChange={handleStatusChange}
-                  onToggleMenu={(documentId) =>
-                    setOpenMenuId((current) =>
-                      current === documentId ? null : documentId,
-                    )
-                  }
-                  isCreating={createDocument.isPending}
-                />
-              ))}
-            </div>
-          </DndContext>
+          {activeView === "board" ? (
+            <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+              <div
+                className={cn(
+                  "grid gap-4",
+                  visibleColumns.length === 1
+                    ? "lg:grid-cols-[minmax(0,28rem)]"
+                    : "lg:grid-cols-3",
+                )}
+              >
+                {visibleColumns.map((column) => (
+                  <BoardColumn
+                    key={column.id}
+                    column={column}
+                    canDeleteDocument={canDeleteFromWorkspace}
+                    canEdit={canEditWorkspace}
+                    documents={filteredDocuments.filter(
+                      (document) => document.status === column.id,
+                    )}
+                    openMenuId={openMenuId}
+                    onCreateDocument={handleCreateDocument}
+                    onDelete={handleDeleteRequest}
+                    onDuplicate={handleDuplicate}
+                    onRename={handleRenameRequest}
+                    onStatusChange={handleStatusChange}
+                    onToggleMenu={(documentId) =>
+                      setOpenMenuId((current) =>
+                        current === documentId ? null : documentId,
+                      )
+                    }
+                    isCreating={createDocument.isPending}
+                  />
+                ))}
+              </div>
+            </DndContext>
+          ) : null}
+
+          {activeView === "list" ? (
+            <DocumentListView
+              documents={filteredDocuments}
+              canEdit={canEditWorkspace}
+              onStatusChange={handleStatusChange}
+            />
+          ) : null}
+
+          {activeView === "activity" ? <ActivityFeed activity={activity} /> : null}
         </div>
 
         <aside className="space-y-5 rounded-[18px] border border-line bg-panel p-4">

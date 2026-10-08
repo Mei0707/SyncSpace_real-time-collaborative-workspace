@@ -56,3 +56,60 @@ export interface DocumentUpdateInput {
   status?: DocumentStatus;
   tags?: string[];
 }
+
+export interface WorkspaceActor {
+  id: string;
+  name: string;
+  email: string;
+  color: string;
+}
+
+export interface DocumentComment {
+  id: string;
+  documentId: string;
+  body: string;
+  mentions: string[];
+  createdAt: string;
+  author: WorkspaceActor;
+}
+
+export interface DocumentAttachment {
+  id: string;
+  documentId: string;
+  name: string;
+  type: string;
+  size: number;
+  dataUrl: string;
+  createdAt: string;
+  uploader: WorkspaceActor;
+}
+
+export interface DocumentVersion {
+  id: string;
+  documentId: string;
+  title: string;
+  summary: string;
+  content: string;
+  status: DocumentStatus;
+  tags: string[];
+  createdAt: string;
+  author: WorkspaceActor;
+}
+
+export interface WorkspaceNotification {
+  id: string;
+  type: "mention" | "document" | "team";
+  message: string;
+  documentId?: string;
+  createdAt: string;
+  readAt?: string;
+}
+
+export interface WorkspaceActivity {
+  id: string;
+  action: string;
+  message: string;
+  documentId?: string;
+  createdAt: string;
+  actor: WorkspaceActor;
+}

@@ -137,7 +137,7 @@ async function handleJsonMessage(client: CollaborationClient, raw: string) {
       id: client.documentId,
       content: text,
       summary: text.slice(0, 120) || "New workspace document.",
-    });
+    }, client.user.id);
   }
 }
 
