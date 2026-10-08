@@ -2,13 +2,17 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
+const apiPort = process.env.API_PORT ?? "8787";
+const apiHttpTarget = `http://localhost:${apiPort}`;
+const apiWsTarget = `ws://localhost:${apiPort}`;
+
 export default defineConfig({
   plugins: [tailwindcss(), react()],
   server: {
     proxy: {
-      "/api": "http://localhost:8787",
+      "/api": apiHttpTarget,
       "/collaboration": {
-        target: "ws://localhost:8787",
+        target: apiWsTarget,
         ws: true,
       },
     },

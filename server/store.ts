@@ -109,7 +109,7 @@ interface ActivityRow {
   actor_color: string;
 }
 
-const dataDir = path.resolve(process.cwd(), "data");
+const dataDir = path.resolve(process.cwd(), process.env.SYNCSPACE_DATA_DIR ?? "data");
 const databasePath = path.join(dataDir, "syncspace.sqlite");
 const legacyWorkspacePath = path.join(dataDir, "workspace.json");
 const legacyYjsDir = path.join(dataDir, "yjs");
