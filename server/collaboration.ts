@@ -3,19 +3,23 @@ import { randomUUID } from "node:crypto";
 import { Server as HttpServer } from "node:http";
 import { WebSocketServer, type WebSocket } from "ws";
 import * as Y from "yjs";
-import { getDocument, loadYjsSnapshot, saveYjsSnapshot, updateDocument } from "./store";
+import type { AuthUser } from "./auth";
+import { getUserBySessionToken } from "./auth";
+import {
+  getDatabase,
+  getDocument,
+  loadYjsSnapshot,
+  saveYjsSnapshot,
+  updateDocument,
+} from "./store";
 
-interface PresenceUser {
-  id: string;
-  name: string;
-  color: string;
-}
+type PresenceUser = Pick<AuthUser, "id" | "name" | "color">;
 
 interface CollaborationClient {
   id: string;
   documentId: string;
   socket: WebSocket;
-  user: PresenceUser | null;
+  user: PresenceUser;
 }
 
 const documents = new Map<string, Y.Doc>();
@@ -61,8 +65,8 @@ function schedulePersist(documentId: string, doc: Y.Doc) {
 
 function getPresence(documentId: string) {
   return [...clients.values()]
-    .filter((client) => client.documentId === documentId && client.user)
-    .map((client) => client.user!);
+    .filter((client) => client.documentId === documentId)
+    .map((client) => client.user);
 }
 
 function broadcastPresence(documentId: string) {
@@ -108,7 +112,6 @@ async function handleJsonMessage(client: CollaborationClient, raw: string) {
     | { type: "snapshot"; text: string };
 
   if (message.type === "presence") {
-    client.user = message.user;
     broadcastPresence(client.documentId);
   }
 
@@ -141,6 +144,13 @@ export function attachCollaborationServer(server: HttpServer) {
   wss.on("connection", async (socket, request) => {
     const url = new URL(request.url ?? "", `http://${request.headers.host}`);
     const documentId = decodeURIComponent(url.pathname.replace("/collaboration/", ""));
+    const user = getUserBySessionToken(getDatabase(), url.searchParams.get("token"));
+
+    if (!user) {
+      socket.close(1008, "Authentication required");
+      return;
+    }
+
     const document = await getDocument(documentId);
 
     if (!document) {
@@ -152,9 +162,10 @@ export function attachCollaborationServer(server: HttpServer) {
       id: randomUUID(),
       documentId,
       socket,
-      user: null,
+      user,
     };
     clients.set(socket, client);
+    broadcastPresence(documentId);
 
     const doc = await getYDoc(documentId);
     socket.send(

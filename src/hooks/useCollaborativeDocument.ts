@@ -3,11 +3,12 @@ import Collaboration from "@tiptap/extension-collaboration";
 import { useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import * as Y from "yjs";
-import { getLocalUser, type LocalUser } from "../lib/clientUser";
+import { useAuth } from "./authContext";
+import type { AuthUser } from "../data/authApi";
 import { base64ToBytes, plainTextToHtml } from "../lib/html";
 import { useUiStore } from "../stores/useUiStore";
 
-export type PresenceUser = LocalUser;
+export type PresenceUser = Pick<AuthUser, "id" | "name" | "color">;
 
 interface SyncMessage {
   type: "sync";
@@ -27,19 +28,23 @@ interface ErrorMessage {
 
 type ServerMessage = SyncMessage | PresenceMessage | ErrorMessage;
 
-function getCollaborationUrl(documentId: string) {
+function getCollaborationUrl(documentId: string, token: string) {
   const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-  return `${protocol}://${window.location.host}/collaboration/${encodeURIComponent(documentId)}`;
+  const encodedDocumentId = encodeURIComponent(documentId);
+  const encodedToken = encodeURIComponent(token);
+
+  return `${protocol}://${window.location.host}/collaboration/${encodedDocumentId}?token=${encodedToken}`;
 }
 
 export function useCollaborativeDocument(documentId: string, fallbackText: string) {
+  const { token, user } = useAuth();
   const setConnectionStatus = useUiStore((state) => state.setConnectionStatus);
   const ydoc = useMemo(() => new Y.Doc({ guid: documentId }), [documentId]);
   const socketRef = useRef<WebSocket | null>(null);
   const retryRef = useRef<number | null>(null);
   const saveTimerRef = useRef<number | null>(null);
   const hasSeededRef = useRef(false);
-  const [localUser] = useState(() => getLocalUser());
+  const localUser = user!;
   const [presence, setPresence] = useState<PresenceUser[]>([]);
   const [isSynced, setSynced] = useState(false);
   const [initialText, setInitialText] = useState(fallbackText);
@@ -89,7 +94,12 @@ export function useCollaborativeDocument(documentId: string, fallbackText: strin
         return;
       }
 
-      const socket = new WebSocket(getCollaborationUrl(documentId));
+      if (!token) {
+        setConnectionStatus("offline");
+        return;
+      }
+
+      const socket = new WebSocket(getCollaborationUrl(documentId, token));
       socket.binaryType = "arraybuffer";
       socketRef.current = socket;
       setConnectionStatus("reconnecting");
@@ -152,7 +162,7 @@ export function useCollaborativeDocument(documentId: string, fallbackText: strin
       setSynced(false);
       setConnectionStatus("offline");
     };
-  }, [documentId, localUser, setConnectionStatus, ydoc]);
+  }, [documentId, localUser, setConnectionStatus, token, ydoc]);
 
   useEffect(() => {
     function handleLocalUpdate(update: Uint8Array, origin: unknown) {

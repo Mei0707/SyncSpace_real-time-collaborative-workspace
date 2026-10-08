@@ -7,6 +7,14 @@ test("syncs edits between two browser sessions", async ({ browser }) => {
   const second = await secondContext.newPage();
   const marker = `sync smoke ${Date.now()}`;
 
+  await first.goto("/");
+  await first.getByRole("button", { name: "Sign in" }).last().click();
+  await expect(first.getByRole("heading", { name: "SyncSpace Product" })).toBeVisible();
+
+  await second.goto("/");
+  await second.getByRole("button", { name: "Sign in" }).last().click();
+  await expect(second.getByRole("heading", { name: "SyncSpace Product" })).toBeVisible();
+
   await first.goto("/documents/doc-roadmap");
   await second.goto("/documents/doc-roadmap");
 

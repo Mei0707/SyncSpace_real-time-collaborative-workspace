@@ -2,6 +2,14 @@ import "@testing-library/jest-dom/vitest";
 import { vi } from "vitest";
 import { mockWorkspace } from "../data/mockWorkspace";
 
+const mockUser = {
+  id: "u1",
+  email: "demo@syncspace.local",
+  name: "Maya Chen",
+  color: "#1a735c",
+  createdAt: "2026-10-01T00:00:00.000Z",
+};
+
 class MockWebSocket extends EventTarget {
   static CONNECTING = 0;
   static OPEN = 1;
@@ -51,6 +59,22 @@ vi.stubGlobal(
   vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = input.toString();
     const documentMatch = url.match(/\/api\/documents\/([^/?]+)/);
+
+    if (url.endsWith("/api/auth/me")) {
+      return Response.json({ user: mockUser });
+    }
+
+    if (url.endsWith("/api/auth/login") && init?.method === "POST") {
+      return Response.json({
+        token: "test-token",
+        expiresAt: "2026-10-15T00:00:00.000Z",
+        user: mockUser,
+      });
+    }
+
+    if (url.endsWith("/api/auth/logout") && init?.method === "POST") {
+      return new Response(null, { status: 204 });
+    }
 
     if (url.endsWith("/api/workspace")) {
       return Response.json(mockWorkspace);

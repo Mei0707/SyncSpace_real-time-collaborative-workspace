@@ -5,6 +5,7 @@ import {
   CircleHelp,
   Files,
   LayoutDashboard,
+  LogOut,
   Menu,
   MessageCircle,
   Moon,
@@ -18,8 +19,8 @@ import {
 } from "lucide-react";
 import { DocumentList } from "./DocumentList";
 import { StatusPill } from "./StatusPill";
+import { useAuth } from "../hooks/authContext";
 import { useCreateDocument, useWorkspaceSearch } from "../hooks/useWorkspace";
-import { getLocalUser } from "../lib/clientUser";
 import { cn } from "../lib/cn";
 import { useUiStore } from "../stores/useUiStore";
 
@@ -175,7 +176,7 @@ function TopBar({ mobileSidebar }: { mobileSidebar: ReactNode }) {
     toggleSidebar,
     toggleTheme,
   } = useUiStore();
-  const [currentUser] = useState(() => getLocalUser());
+  const { logout, user } = useAuth();
 
   return (
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-line bg-panel/92 px-4 backdrop-blur md:px-5">
@@ -219,26 +220,37 @@ function TopBar({ mobileSidebar }: { mobileSidebar: ReactNode }) {
         >
           {theme === "light" ? <Moon size={17} /> : <Sun size={17} />}
         </button>
-        <div className="ml-1 hidden items-center gap-2 rounded-md border border-line bg-canvas/70 py-1 pl-1 pr-2 md:flex">
-          <span
-            className="grid h-7 w-7 place-items-center rounded-full text-[10px] font-semibold text-white"
-            style={{ backgroundColor: currentUser.color }}
-          >
-            {currentUser.name
-              .split(" ")
-              .map((part) => part[0])
-              .join("")
-              .slice(0, 2)}
-          </span>
-          <span className="hidden min-w-0 lg:block">
-            <span className="block max-w-28 truncate text-xs font-semibold leading-4">
-              {currentUser.name}
+        {user ? (
+          <div className="ml-1 hidden items-center gap-2 rounded-md border border-line bg-canvas/70 py-1 pl-1 pr-1 md:flex">
+            <span
+              className="grid h-7 w-7 place-items-center rounded-full text-[10px] font-semibold text-white"
+              style={{ backgroundColor: user.color }}
+            >
+              {user.name
+                .split(" ")
+                .map((part) => part[0])
+                .join("")
+                .slice(0, 2)}
             </span>
-            <span className="block text-[10px] leading-3 text-soft">
-              Workspace member
+            <span className="hidden min-w-0 lg:block">
+              <span className="block max-w-28 truncate text-xs font-semibold leading-4">
+                {user.name}
+              </span>
+              <span className="block text-[10px] leading-3 text-soft">
+                Workspace member
+              </span>
             </span>
-          </span>
-        </div>
+            <button
+              type="button"
+              onClick={() => void logout()}
+              className="grid h-7 w-7 place-items-center rounded-md text-soft transition hover:bg-muted hover:text-ink"
+              aria-label="Sign out"
+              title="Sign out"
+            >
+              <LogOut size={14} />
+            </button>
+          </div>
+        ) : null}
       </div>
     </header>
   );

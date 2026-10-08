@@ -2,6 +2,8 @@
 
 SyncSpace is a real-time collaborative workspace prototype based on the project proposal in `proposal.txt`.
 
+![SyncSpace workspace dashboard](docs/assets/workspace-dashboard.png)
+
 This implementation now includes the Phase 1 foundation and the first collaboration backend:
 
 - React, TypeScript, Vite, Tailwind CSS, React Router
@@ -9,14 +11,15 @@ This implementation now includes the Phase 1 foundation and the first collaborat
 - TanStack Query for server-state access and mutations
 - Node/Express REST API for workspaces and documents
 - SQLite-backed metadata persistence in `data/syncspace.sqlite`
+- Email/password authentication with hashed passwords and database-backed sessions
 - TipTap rich-text editor with Yjs shared document state
-- WebSocket collaboration transport with reconnect status
+- Authenticated WebSocket collaboration transport with reconnect status
 - Persisted Yjs snapshots in SQLite
 - Responsive workspace shell with collapsible navigation
 - Drag-and-drop document board with status updates
 - Optimistic board mutations with rollback on API failure
 - Board search, status filters, and card menus for rename, duplicate, delete, and status changes
-- Local mock workspace identity shown in the top bar
+- Signed-in workspace identity and logout from the top bar
 - Searchable document list and lazy-loaded editable document page
 - Theme switching, live sync status, and active collaborator presence
 - Vitest, React Testing Library, and Playwright collaboration tests
@@ -38,9 +41,14 @@ npm run lint
 
 The browser app proxies `/api` and `/collaboration` requests through Vite during development.
 
+Demo credentials are seeded automatically for local development:
+
+- Email: `demo@syncspace.local`
+- Password: `password`
+
 ## Remaining Implementation Phases
 
 1. Move from local SQLite to PostgreSQL for deployed multi-user environments.
-2. Replace the local mock identity with authentication and workspace authorization.
+2. Add workspace roles and document-level authorization rules.
 3. Add collaborator cursor rendering.
 4. Add CI browser installation/cache strategy for Playwright.

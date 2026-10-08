@@ -8,6 +8,7 @@ import type {
   Workspace,
   WorkspaceDocument,
 } from "../src/data/types";
+import { ensureDemoUser, initializeAuthSchema } from "./auth";
 import { seedWorkspace } from "./seed";
 
 interface DocumentRow {
@@ -37,7 +38,7 @@ const legacyYjsDir = path.join(dataDir, "yjs");
 
 let db: DatabaseSync | null = null;
 
-function getDatabase() {
+export function getDatabase() {
   if (db) {
     return db;
   }
@@ -71,6 +72,8 @@ function getDatabase() {
       updated_at TEXT NOT NULL
     );
   `);
+  initializeAuthSchema(db);
+  ensureDemoUser(db);
   seedIfEmpty();
 
   return db;
@@ -227,7 +230,7 @@ export async function updateDocument(input: DocumentUpdateInput) {
   return structuredClone(nextDocument);
 }
 
-export async function createDocument(title: string) {
+export async function createDocument(title: string, ownerId = "u1") {
   const database = getDatabase();
   const now = new Date().toISOString();
   const slug = slugify(title);
@@ -244,7 +247,7 @@ export async function createDocument(title: string) {
     tags: [],
     updatedAt: now,
     createdAt: now,
-    ownerId: "u1",
+    ownerId,
     collaborators: [],
   };
 
@@ -275,14 +278,14 @@ export async function createDocument(title: string) {
   return structuredClone(document);
 }
 
-export async function duplicateDocument(documentId: string) {
+export async function duplicateDocument(documentId: string, ownerId = "u1") {
   const source = await getDocument(documentId);
 
   if (!source) {
     return null;
   }
 
-  const copy = await createDocument(`${source.title} Copy`);
+  const copy = await createDocument(`${source.title} Copy`, ownerId);
   const updated = await updateDocument({
     id: copy.id,
     content: source.content,
