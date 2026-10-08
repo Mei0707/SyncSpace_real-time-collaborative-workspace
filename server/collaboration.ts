@@ -19,6 +19,7 @@ type PresenceUser = Pick<AuthUser, "id" | "name" | "color">;
 interface CollaborationClient {
   id: string;
   documentId: string;
+  initialText: string;
   socket: WebSocket;
   user: PresenceUser;
   role: WorkspaceRole;
@@ -30,6 +31,10 @@ const persistTimers = new Map<string, NodeJS.Timeout>();
 
 function encodeUpdate(update: Uint8Array) {
   return Buffer.from(update).toString("base64");
+}
+
+function decodeUpdate(update: string) {
+  return new Uint8Array(Buffer.from(update, "base64"));
 }
 
 async function getYDoc(documentId: string) {
@@ -115,10 +120,25 @@ function canWrite(role: WorkspaceRole) {
 async function handleJsonMessage(client: CollaborationClient, raw: string) {
   const message = JSON.parse(raw) as
     | { type: "presence"; user: PresenceUser }
-    | { type: "snapshot"; text: string };
+    | { type: "snapshot"; text: string }
+    | { type: "sync-state"; stateVector: string };
 
   if (message.type === "presence") {
     broadcastPresence(client.documentId);
+  }
+
+  if (message.type === "sync-state") {
+    const doc = await getYDoc(client.documentId);
+    const clientStateVector = decodeUpdate(message.stateVector);
+
+    client.socket.send(
+      JSON.stringify({
+        type: "sync-update",
+        update: encodeUpdate(Y.encodeStateAsUpdate(doc, clientStateVector)),
+        stateVector: encodeUpdate(Y.encodeStateVector(doc)),
+        initialText: client.initialText,
+      }),
+    );
   }
 
   if (message.type === "snapshot") {
@@ -184,6 +204,7 @@ export function attachCollaborationServer(server: HttpServer) {
     const client: CollaborationClient = {
       id: randomUUID(),
       documentId,
+      initialText: document.content,
       socket,
       user,
       role: membership.role,
@@ -196,6 +217,7 @@ export function attachCollaborationServer(server: HttpServer) {
       JSON.stringify({
         type: "sync",
         update: encodeUpdate(Y.encodeStateAsUpdate(doc)),
+        stateVector: encodeUpdate(Y.encodeStateVector(doc)),
         initialText: document.content,
       }),
     );

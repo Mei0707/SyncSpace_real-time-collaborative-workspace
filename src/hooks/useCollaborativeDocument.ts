@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Collaboration from "@tiptap/extension-collaboration";
 import { useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import * as Y from "yjs";
 import { useAuth } from "./authContext";
 import type { AuthUser } from "../data/authApi";
-import { base64ToBytes, plainTextToHtml } from "../lib/html";
+import { base64ToBytes, bytesToBase64, plainTextToHtml } from "../lib/html";
+import { createMissingYjsUpdate, isEmptyYjsUpdate } from "../lib/yjsSync";
 import { useUiStore } from "../stores/useUiStore";
 
 export type PresenceUser = Pick<AuthUser, "id" | "name" | "color">;
@@ -13,6 +14,14 @@ export type PresenceUser = Pick<AuthUser, "id" | "name" | "color">;
 interface SyncMessage {
   type: "sync";
   update: string;
+  initialText: string;
+  stateVector?: string;
+}
+
+interface SyncUpdateMessage {
+  type: "sync-update";
+  update: string;
+  stateVector: string;
   initialText: string;
 }
 
@@ -26,7 +35,7 @@ interface ErrorMessage {
   message: string;
 }
 
-type ServerMessage = SyncMessage | PresenceMessage | ErrorMessage;
+type ServerMessage = SyncMessage | SyncUpdateMessage | PresenceMessage | ErrorMessage;
 
 function getCollaborationUrl(documentId: string, token: string) {
   const protocol = window.location.protocol === "https:" ? "wss" : "ws";
@@ -36,6 +45,12 @@ function getCollaborationUrl(documentId: string, token: string) {
   return `${protocol}://${window.location.host}/collaboration/${encodedDocumentId}?token=${encodedToken}`;
 }
 
+function sendJson(socket: WebSocket, payload: unknown) {
+  if (socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify(payload));
+  }
+}
+
 export function useCollaborativeDocument(documentId: string, fallbackText: string) {
   const { token, user } = useAuth();
   const setConnectionStatus = useUiStore((state) => state.setConnectionStatus);
@@ -43,11 +58,46 @@ export function useCollaborativeDocument(documentId: string, fallbackText: strin
   const socketRef = useRef<WebSocket | null>(null);
   const retryRef = useRef<number | null>(null);
   const saveTimerRef = useRef<number | null>(null);
+  const pendingSnapshotTextRef = useRef<string | null>(null);
   const hasSeededRef = useRef(false);
   const localUser = user!;
   const [presence, setPresence] = useState<PresenceUser[]>([]);
   const [isSynced, setSynced] = useState(false);
   const [initialText, setInitialText] = useState(fallbackText);
+
+  const sendPendingSnapshot = useCallback((socket = socketRef.current) => {
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    if (pendingSnapshotTextRef.current === null) {
+      return;
+    }
+
+    sendJson(socket, {
+      type: "snapshot",
+      text: pendingSnapshotTextRef.current,
+    });
+    pendingSnapshotTextRef.current = null;
+  }, []);
+
+  const sendStateVector = useCallback((socket: WebSocket) => {
+    sendJson(socket, {
+      type: "sync-state",
+      stateVector: bytesToBase64(Y.encodeStateVector(ydoc)),
+    });
+  }, [ydoc]);
+
+  const sendMissingLocalUpdate = useCallback((socket: WebSocket, serverStateVector: string) => {
+    const missingUpdate = createMissingYjsUpdate(
+      ydoc,
+      base64ToBytes(serverStateVector),
+    );
+
+    if (!isEmptyYjsUpdate(missingUpdate) && socket.readyState === WebSocket.OPEN) {
+      socket.send(missingUpdate);
+    }
+  }, [ydoc]);
 
   const editor = useEditor(
     {
@@ -68,21 +118,18 @@ export function useCollaborativeDocument(documentId: string, fallbackText: strin
       },
       immediatelyRender: false,
       onUpdate: ({ editor: activeEditor }) => {
+        pendingSnapshotTextRef.current = activeEditor.getText();
+
         if (saveTimerRef.current) {
           window.clearTimeout(saveTimerRef.current);
         }
 
         saveTimerRef.current = window.setTimeout(() => {
-          socketRef.current?.send(
-            JSON.stringify({
-              type: "snapshot",
-              text: activeEditor.getText(),
-            }),
-          );
+          sendPendingSnapshot();
         }, 650);
       },
     },
-    [ydoc],
+    [ydoc, sendPendingSnapshot],
   );
 
   useEffect(() => {
@@ -106,8 +153,11 @@ export function useCollaborativeDocument(documentId: string, fallbackText: strin
 
       socket.addEventListener("open", () => {
         retryDelay = 350;
+        setSynced(false);
         setConnectionStatus("connected");
-        socket.send(JSON.stringify({ type: "presence", user: localUser }));
+        sendJson(socket, { type: "presence", user: localUser });
+        sendStateVector(socket);
+        sendPendingSnapshot(socket);
       });
 
       socket.addEventListener("message", (event) => {
@@ -123,6 +173,20 @@ export function useCollaborativeDocument(documentId: string, fallbackText: strin
             Y.applyUpdate(ydoc, base64ToBytes(message.update), "remote");
           }
 
+          if (message.stateVector) {
+            sendMissingLocalUpdate(socket, message.stateVector);
+          }
+
+          setInitialText(message.initialText);
+          setSynced(true);
+        }
+
+        if (message.type === "sync-update") {
+          if (message.update) {
+            Y.applyUpdate(ydoc, base64ToBytes(message.update), "remote");
+          }
+
+          sendMissingLocalUpdate(socket, message.stateVector);
           setInitialText(message.initialText);
           setSynced(true);
         }
@@ -162,7 +226,16 @@ export function useCollaborativeDocument(documentId: string, fallbackText: strin
       setSynced(false);
       setConnectionStatus("offline");
     };
-  }, [documentId, localUser, setConnectionStatus, token, ydoc]);
+  }, [
+    documentId,
+    localUser,
+    sendMissingLocalUpdate,
+    sendPendingSnapshot,
+    sendStateVector,
+    setConnectionStatus,
+    token,
+    ydoc,
+  ]);
 
   useEffect(() => {
     function handleLocalUpdate(update: Uint8Array, origin: unknown) {
