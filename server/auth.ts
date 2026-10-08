@@ -6,7 +6,11 @@ import {
   timingSafeEqual,
 } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
-import type { WorkspaceRole } from "../src/data/types";
+import type {
+  WorkspaceInvitation,
+  WorkspaceMember,
+  WorkspaceRole,
+} from "../src/data/types";
 
 const sessionDays = 7;
 const colors = ["#1a735c", "#2962ff", "#b36b00", "#8b5cf6", "#c2410c", "#0f766e"];
@@ -47,6 +51,17 @@ interface MembershipRow {
   user_id: string;
   role: WorkspaceRole;
   created_at: string;
+}
+
+interface InvitationRow {
+  id: string;
+  workspace_id: string;
+  email: string;
+  role: Exclude<WorkspaceRole, "owner">;
+  status: WorkspaceInvitation["status"];
+  invited_by: string;
+  created_at: string;
+  accepted_at: string | null;
 }
 
 export class AuthError extends Error {
@@ -173,6 +188,19 @@ export function initializeAuthSchema(database: DatabaseSync) {
       FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS workspace_invitations (
+      id TEXT PRIMARY KEY,
+      workspace_id TEXT NOT NULL,
+      email TEXT NOT NULL,
+      role TEXT NOT NULL,
+      status TEXT NOT NULL,
+      invited_by TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      accepted_at TEXT,
+      FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+      FOREIGN KEY (invited_by) REFERENCES users(id) ON DELETE CASCADE
+    );
   `);
 }
 
@@ -230,6 +258,307 @@ export function getWorkspaceMembership(
   return row ?? null;
 }
 
+function isAssignableRole(role: WorkspaceRole): role is Exclude<WorkspaceRole, "owner"> {
+  return role === "admin" || role === "editor" || role === "viewer";
+}
+
+function isWorkspaceRole(role: unknown): role is WorkspaceRole {
+  return role === "owner" || role === "admin" || role === "editor" || role === "viewer";
+}
+
+function toInvitation(row: InvitationRow): WorkspaceInvitation {
+  return {
+    id: row.id,
+    email: row.email,
+    role: row.role,
+    status: row.status,
+    invitedBy: row.invited_by,
+    createdAt: row.created_at,
+    acceptedAt: row.accepted_at ?? undefined,
+  };
+}
+
+export function listWorkspaceMembers(
+  database: DatabaseSync,
+  workspaceId = getDefaultWorkspaceId(database),
+) {
+  if (!workspaceId) {
+    return [];
+  }
+
+  const rows = database
+    .prepare(
+      `
+      SELECT users.id, users.email, users.name, users.color,
+             workspace_memberships.role, workspace_memberships.created_at as joined_at
+      FROM workspace_memberships
+      INNER JOIN users ON users.id = workspace_memberships.user_id
+      WHERE workspace_memberships.workspace_id = ?
+      ORDER BY
+        CASE workspace_memberships.role
+          WHEN 'owner' THEN 0
+          WHEN 'admin' THEN 1
+          WHEN 'editor' THEN 2
+          ELSE 3
+        END,
+        users.name COLLATE NOCASE ASC
+    `,
+    )
+    .all(workspaceId) as Array<{
+    id: string;
+    email: string;
+    name: string;
+    color: string;
+    role: WorkspaceRole;
+    joined_at: string;
+  }>;
+
+  return rows.map(
+    (row): WorkspaceMember => ({
+      id: row.id,
+      email: row.email,
+      name: row.name,
+      color: row.color,
+      role: row.role,
+      joinedAt: row.joined_at,
+    }),
+  );
+}
+
+export function listWorkspaceInvitations(
+  database: DatabaseSync,
+  workspaceId = getDefaultWorkspaceId(database),
+) {
+  if (!workspaceId) {
+    return [];
+  }
+
+  const rows = database
+    .prepare(
+      `
+      SELECT *
+      FROM workspace_invitations
+      WHERE workspace_id = ?
+      ORDER BY created_at DESC
+    `,
+    )
+    .all(workspaceId) as InvitationRow[];
+
+  return rows.map(toInvitation);
+}
+
+function countOwners(database: DatabaseSync, workspaceId = getDefaultWorkspaceId(database)) {
+  if (!workspaceId) {
+    return 0;
+  }
+
+  const row = database
+    .prepare(
+      `
+      SELECT COUNT(*) as count
+      FROM workspace_memberships
+      WHERE workspace_id = ? AND role = 'owner'
+    `,
+    )
+    .get(workspaceId) as { count: number };
+
+  return row.count;
+}
+
+function getMembershipRole(
+  database: DatabaseSync,
+  userId: string,
+  workspaceId = getDefaultWorkspaceId(database),
+) {
+  return getWorkspaceMembership(database, userId, workspaceId)?.role ?? null;
+}
+
+export function createWorkspaceInvitation(
+  database: DatabaseSync,
+  input: {
+    email: string;
+    role: WorkspaceRole;
+    invitedBy: string;
+    workspaceId?: string | null;
+  },
+) {
+  const workspaceId = input.workspaceId ?? getDefaultWorkspaceId(database);
+  const email = normalizeEmail(input.email);
+
+  if (!workspaceId) {
+    throw new AuthError("Workspace not found.", 404);
+  }
+
+  if (!email.includes("@")) {
+    throw new AuthError("Enter a valid email address.");
+  }
+
+  if (!isAssignableRole(input.role)) {
+    throw new AuthError("Invite role must be admin, editor, or viewer.");
+  }
+
+  const now = new Date().toISOString();
+  const user = getUserByEmail(database, email);
+  const invitation: WorkspaceInvitation = {
+    id: randomUUID(),
+    email,
+    role: input.role,
+    status: user ? "accepted" : "pending",
+    invitedBy: input.invitedBy,
+    createdAt: now,
+    acceptedAt: user ? now : undefined,
+  };
+
+  database
+    .prepare(
+      `
+      INSERT INTO workspace_invitations (
+        id, workspace_id, email, role, status, invited_by, created_at, accepted_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+    )
+    .run(
+      invitation.id,
+      workspaceId,
+      invitation.email,
+      invitation.role,
+      invitation.status,
+      invitation.invitedBy,
+      invitation.createdAt,
+      invitation.acceptedAt ?? null,
+    );
+
+  if (user) {
+    ensureWorkspaceMembership(database, user.id, input.role, workspaceId);
+  }
+
+  return invitation;
+}
+
+export function updateWorkspaceMemberRole(
+  database: DatabaseSync,
+  input: {
+    actorId: string;
+    userId: string;
+    role: WorkspaceRole;
+    workspaceId?: string | null;
+  },
+) {
+  const workspaceId = input.workspaceId ?? getDefaultWorkspaceId(database);
+
+  if (!workspaceId) {
+    throw new AuthError("Workspace not found.", 404);
+  }
+
+  const actorRole = getMembershipRole(database, input.actorId, workspaceId);
+  const currentRole = getMembershipRole(database, input.userId, workspaceId);
+
+  if (!currentRole) {
+    throw new AuthError("Member not found.", 404);
+  }
+
+  if (!isWorkspaceRole(input.role)) {
+    throw new AuthError("Role must be owner, admin, editor, or viewer.");
+  }
+
+  if (input.role === "owner" && actorRole !== "owner") {
+    throw new AuthError("Only owners can assign owner role.", 403);
+  }
+
+  if (currentRole === "owner" && actorRole !== "owner") {
+    throw new AuthError("Only owners can change another owner.", 403);
+  }
+
+  if (currentRole === "owner" && input.role !== "owner" && countOwners(database, workspaceId) <= 1) {
+    throw new AuthError("At least one owner is required.", 409);
+  }
+
+  database
+    .prepare(
+      `
+      UPDATE workspace_memberships
+      SET role = ?
+      WHERE workspace_id = ? AND user_id = ?
+    `,
+    )
+    .run(input.role, workspaceId, input.userId);
+
+  return getWorkspaceMembership(database, input.userId, workspaceId);
+}
+
+export function removeWorkspaceMember(
+  database: DatabaseSync,
+  input: {
+    actorId: string;
+    userId: string;
+    workspaceId?: string | null;
+  },
+) {
+  const workspaceId = input.workspaceId ?? getDefaultWorkspaceId(database);
+
+  if (!workspaceId) {
+    throw new AuthError("Workspace not found.", 404);
+  }
+
+  const actorRole = getMembershipRole(database, input.actorId, workspaceId);
+  const currentRole = getMembershipRole(database, input.userId, workspaceId);
+
+  if (!currentRole) {
+    throw new AuthError("Member not found.", 404);
+  }
+
+  if (currentRole === "owner" && actorRole !== "owner") {
+    throw new AuthError("Only owners can remove owners.", 403);
+  }
+
+  if (currentRole === "owner" && countOwners(database, workspaceId) <= 1) {
+    throw new AuthError("At least one owner is required.", 409);
+  }
+
+  database
+    .prepare(
+      `
+      DELETE FROM workspace_memberships
+      WHERE workspace_id = ? AND user_id = ?
+    `,
+    )
+    .run(workspaceId, input.userId);
+}
+
+function acceptPendingInvitations(database: DatabaseSync, user: AuthUser) {
+  const rows = database
+    .prepare(
+      `
+      SELECT *
+      FROM workspace_invitations
+      WHERE email = ? AND status = 'pending'
+      ORDER BY created_at DESC
+    `,
+    )
+    .all(user.email) as InvitationRow[];
+
+  if (rows.length === 0) {
+    ensureWorkspaceMembership(database, user.id, "editor");
+    return;
+  }
+
+  const acceptedAt = new Date().toISOString();
+
+  for (const row of rows) {
+    ensureWorkspaceMembership(database, user.id, row.role, row.workspace_id);
+    database
+      .prepare(
+        `
+        UPDATE workspace_invitations
+        SET status = 'accepted', accepted_at = ?
+        WHERE id = ?
+      `,
+      )
+      .run(acceptedAt, row.id);
+  }
+}
+
 export function ensureDemoUser(database: DatabaseSync) {
   const existing = getUserByEmail(database, "demo@syncspace.local");
 
@@ -255,7 +584,7 @@ export async function registerUser(
   input: { name: string; email: string; password: string },
 ) {
   const user = insertUser(database, input);
-  ensureWorkspaceMembership(database, user.id, "editor");
+  acceptPendingInvitations(database, user);
   return createSession(database, user.id);
 }
 

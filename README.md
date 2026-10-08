@@ -14,6 +14,8 @@ This implementation now includes the Phase 1 foundation and the first collaborat
 - Email/password authentication with hashed passwords and database-backed sessions
 - Workspace membership roles: owner, admin, editor, and viewer
 - Server-side authorization for workspace reads, document writes, deletes, and collaboration edits
+- Team management screen for member listing, invitations, role changes, and member removal
+- Pending invitations that are accepted automatically when invited users register
 - TipTap rich-text editor with Yjs shared document state
 - Authenticated WebSocket collaboration transport with reconnect status
 - Persisted Yjs snapshots in SQLite
@@ -52,6 +54,6 @@ Demo credentials are seeded automatically for local development:
 ## Remaining Implementation Phases
 
 1. Move from local SQLite to PostgreSQL for deployed multi-user environments.
-2. Add member invitation and role-management screens.
+2. Add outbound email delivery for workspace invitations.
 3. Add collaborator cursor rendering.
 4. Add CI browser installation/cache strategy for Playwright.

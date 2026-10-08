@@ -4,6 +4,7 @@ import { WorkspaceLayout } from "./components/WorkspaceLayout";
 import { useAuth } from "./hooks/authContext";
 import { AuthPage } from "./pages/AuthPage";
 import { DashboardPage } from "./pages/DashboardPage";
+import { TeamPage } from "./pages/TeamPage";
 
 const DocumentPage = lazy(() =>
   import("./pages/DocumentPage").then((module) => ({
@@ -38,6 +39,7 @@ export function App() {
     <Routes>
       <Route element={<WorkspaceLayout />}>
         <Route index element={<DashboardPage />} />
+        <Route path="team" element={<TeamPage />} />
         <Route
           path="documents/:documentId"
           element={

@@ -4,11 +4,16 @@ import express from "express";
 import type { AuthUser } from "./auth";
 import {
   AuthError,
+  createWorkspaceInvitation,
   deleteSession,
   getUserBySessionToken,
   getWorkspaceMembership,
+  listWorkspaceInvitations,
+  listWorkspaceMembers,
   loginUser,
+  removeWorkspaceMember,
   registerUser,
+  updateWorkspaceMemberRole,
 } from "./auth";
 import { attachCollaborationServer } from "./collaboration";
 import type { WorkspaceRole } from "../src/data/types";
@@ -87,6 +92,10 @@ function canDeleteAny(role: WorkspaceRole) {
   return role === "owner" || role === "admin";
 }
 
+function canManageMembers(role: WorkspaceRole) {
+  return role === "owner" || role === "admin";
+}
+
 function requireWriter(request: express.Request, response: express.Response) {
   const membership = getMembershipOrReject(request, response);
 
@@ -96,6 +105,21 @@ function requireWriter(request: express.Request, response: express.Response) {
 
   if (!canWrite(membership.role)) {
     response.status(403).json({ message: "Editor access required" });
+    return null;
+  }
+
+  return membership;
+}
+
+function requireMemberManager(request: express.Request, response: express.Response) {
+  const membership = getMembershipOrReject(request, response);
+
+  if (!membership) {
+    return null;
+  }
+
+  if (!canManageMembers(membership.role)) {
+    response.status(403).json({ message: "Admin access required" });
     return null;
   }
 
@@ -151,6 +175,78 @@ app.get("/api/workspace", requireAuth, async (_request, response, next) => {
     }
 
     response.json(await getWorkspace(membership.role));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/workspace/members", requireAuth, (request, response, next) => {
+  try {
+    const membership = getMembershipOrReject(request, response);
+
+    if (!membership) {
+      return;
+    }
+
+    response.json({
+      currentUserRole: membership.role,
+      members: listWorkspaceMembers(getDatabase()),
+      invitations: canManageMembers(membership.role)
+        ? listWorkspaceInvitations(getDatabase())
+        : [],
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/workspace/invitations", requireAuth, (request, response, next) => {
+  try {
+    if (!requireMemberManager(request, response)) {
+      return;
+    }
+
+    response.status(201).json(
+      createWorkspaceInvitation(getDatabase(), {
+        email: request.body.email ?? "",
+        role: request.body.role ?? "viewer",
+        invitedBy: (request as AuthenticatedRequest).user.id,
+      }),
+    );
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.patch("/api/workspace/members/:userId", requireAuth, (request, response, next) => {
+  try {
+    if (!requireMemberManager(request, response)) {
+      return;
+    }
+
+    response.json(
+      updateWorkspaceMemberRole(getDatabase(), {
+        actorId: (request as AuthenticatedRequest).user.id,
+        userId: getRouteParam(request.params.userId),
+        role: request.body.role,
+      }),
+    );
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete("/api/workspace/members/:userId", requireAuth, (request, response, next) => {
+  try {
+    if (!requireMemberManager(request, response)) {
+      return;
+    }
+
+    removeWorkspaceMember(getDatabase(), {
+      actorId: (request as AuthenticatedRequest).user.id,
+      userId: getRouteParam(request.params.userId),
+    });
+    response.status(204).send();
   } catch (error) {
     next(error);
   }

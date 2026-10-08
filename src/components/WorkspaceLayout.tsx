@@ -26,11 +26,20 @@ import { useUiStore } from "../stores/useUiStore";
 
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const [search, setSearch] = useState("");
+  const location = useLocation();
   const navigate = useNavigate();
   const { data, documents, isLoading } = useWorkspaceSearch(search);
   const createDocument = useCreateDocument();
+  const canCreateDocument =
+    data?.currentUserRole === "owner" ||
+    data?.currentUserRole === "admin" ||
+    data?.currentUserRole === "editor";
 
   async function handleCreateDocument() {
+    if (!canCreateDocument) {
+      return;
+    }
+
     const document = await createDocument.mutateAsync("Untitled document");
     navigate(`/documents/${document.id}`);
     onNavigate?.();
@@ -63,7 +72,12 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         <Link
           to="/"
           onClick={onNavigate}
-          className="flex h-9 items-center gap-2 rounded-md bg-muted px-2.5 text-sm font-medium text-ink"
+          className={cn(
+            "flex h-9 items-center gap-2 rounded-md px-2.5 text-sm font-medium transition",
+            location.pathname === "/"
+              ? "bg-muted text-ink"
+              : "text-soft hover:bg-muted hover:text-ink",
+          )}
         >
           <LayoutDashboard size={15} />
           Dashboard
@@ -75,13 +89,19 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           <Files size={15} />
           Files
         </button>
-        <button
-          type="button"
-          className="flex h-9 w-full items-center gap-2 rounded-md px-2.5 text-sm text-soft transition hover:bg-muted hover:text-ink"
+        <Link
+          to="/team"
+          onClick={onNavigate}
+          className={cn(
+            "flex h-9 w-full items-center gap-2 rounded-md px-2.5 text-sm transition hover:bg-muted hover:text-ink",
+            location.pathname === "/team"
+              ? "bg-muted font-medium text-ink"
+              : "text-soft",
+          )}
         >
           <Users size={15} />
           Team
-        </button>
+        </Link>
       </div>
 
       <div className="space-y-3 border-b border-line/80 py-4">
@@ -103,7 +123,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           type="button"
           onClick={handleCreateDocument}
           className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-md bg-ink px-3 text-sm font-semibold text-panel transition hover:bg-ink/90 disabled:opacity-60"
-          disabled={createDocument.isPending}
+          disabled={!canCreateDocument || createDocument.isPending}
         >
           <Plus size={15} />
           New document
